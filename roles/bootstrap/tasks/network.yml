@@ -1,0 +1,107 @@
+---
+# Network configuration tasks (static IP via NetworkManager)
+
+- name: Check if NetworkManager is available
+  ansible.builtin.command: which nmcli
+  register: _nmcli_check
+  changed_when: false
+  failed_when: false
+
+- name: Install NetworkManager (Debian/Ubuntu)
+  ansible.builtin.apt:
+    name: network-manager
+    state: present
+    update_cache: true
+  when:
+    - _nmcli_check.rc != 0
+    - ansible_facts['os_family'] == 'Debian'
+
+- name: Install NetworkManager (RedHat)
+  ansible.builtin.dnf:
+    name: NetworkManager
+    state: present
+  when:
+    - _nmcli_check.rc != 0
+    - ansible_facts['os_family'] == 'RedHat'
+
+- name: Ensure NetworkManager is running
+  ansible.builtin.systemd:
+    name: NetworkManager
+    state: started
+    enabled: true
+
+- name: Get default network connection name
+  ansible.builtin.shell: |
+    set -o pipefail
+    nmcli -t -f NAME,DEVICE con show --active | grep -E ':(eth|en|wl)' | head -1 | cut -d: -f1
+  args:
+    executable: /bin/bash
+  register: _nmcli_connection
+  changed_when: false
+  when: bootstrap_network_connection | default('') | length == 0
+
+- name: Set connection name fact
+  ansible.builtin.set_fact:
+    _network_connection: "{{ bootstrap_network_connection if bootstrap_network_connection | default('') | length > 0 else _nmcli_connection.stdout }}"
+
+# Network changes applied on reboot - no need to restart connection mid-playbook
+- name: Configure static IPv4
+  community.general.nmcli:
+    conn_name: "{{ _network_connection }}"
+    type: ethernet
+    ip4: "{{ bootstrap_static_ip }}"
+    gw4: "{{ bootstrap_gateway }}"
+    dns4: "{{ bootstrap_dns4 }}"
+    dns4_ignore_auto: "{{ bootstrap_dns4_ignore_auto | default(true) }}"
+    method4: manual
+    state: present
+  when:
+    - bootstrap_static_ip | default('') | length > 0
+    - bootstrap_gateway | default('') | length > 0
+
+- name: Configure static IPv6 (manual mode)
+  community.general.nmcli:
+    conn_name: "{{ _network_connection }}"
+    type: ethernet
+    ip6: "{{ bootstrap_static_ip6 }}"
+    gw6: "{{ bootstrap_gateway6 }}"
+    dns6: "{{ bootstrap_dns6 }}"
+    dns6_ignore_auto: "{{ bootstrap_dns6_ignore_auto | default(true) }}"
+    method6: manual
+    state: present
+  when:
+    - bootstrap_static_ip6 | default('') | length > 0
+    - bootstrap_gateway6 | default('') | length > 0
+    - not (bootstrap_ipv6_dhcpv6 | default(false))
+
+# Auto mode with additional static address (for DHCPv6 + ULA)
+- name: Configure IPv6 with SLAAC (auto mode)
+  community.general.nmcli:
+    conn_name: "{{ _network_connection }}"
+    type: ethernet
+    dns6: "{{ bootstrap_dns6 }}"
+    dns6_ignore_auto: "{{ bootstrap_dns6_ignore_auto | default(true) }}"
+    method6: dhcp
+    state: present
+  when:
+    - bootstrap_ipv6_dhcpv6 | default(false)
+
+- name: Add static IPv6 address alongside SLAAC
+  ansible.builtin.command:
+    cmd: nmcli con mod "{{ _network_connection }}" +ipv6.addresses "{{ bootstrap_static_ip6 }}"
+  register: _add_static_ipv6
+  changed_when: _add_static_ipv6.rc == 0
+  failed_when: false
+  when:
+    - bootstrap_ipv6_dhcpv6 | default(false)
+    - bootstrap_static_ip6 | default('') | length > 0
+
+- name: Disable IPv6 if not configured
+  community.general.nmcli:
+    conn_name: "{{ _network_connection }}"
+    type: ethernet
+    method6: disabled
+    state: present
+  when:
+    - bootstrap_ipv6_disabled | default(false)
+    - bootstrap_static_ip6 | default('') | length == 0

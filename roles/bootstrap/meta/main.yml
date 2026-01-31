@@ -1,0 +1,246 @@
+---
+dependencies: []
+
+argument_specs:
+  main:
+    short_description: Universal server bootstrap role
+    description:
+      - Creates admin user with sudo access
+      - Configures SSH hardening and key deployment
+      - Sets hostname and static network configuration
+      - Configures firewalld with services, ports, and custom zones
+      - Expands root filesystem for cloud images
+    options:
+      # User configuration
+      bootstrap_user_enabled:
+        type: bool
+        required: false
+        default: true
+        description: Enable user creation
+      bootstrap_user:
+        type: str
+        required: false
+        default: "admin"
+        description: Username to create
+      bootstrap_user_password:
+        type: str
+        required: false
+        default: ""
+        description: Hashed password (use mkpasswd -m sha-512)
+      bootstrap_user_group:
+        type: str
+        required: false
+        default: ""
+        description: Primary group (auto-detect wheel/sudo if empty)
+      bootstrap_user_extra_groups:
+        type: list
+        elements: str
+        required: false
+        default: []
+        description: Additional groups for user
+      bootstrap_user_create_group:
+        type: bool
+        required: false
+        default: false
+        description: Create custom group if not exists
+      bootstrap_user_shell:
+        type: str
+        required: false
+        default: "/bin/bash"
+        description: User shell
+      bootstrap_user_nopasswd_sudo:
+        type: bool
+        required: false
+        default: true
+        description: Allow passwordless sudo
+
+      # SSH key configuration
+      bootstrap_ssh_pubkey:
+        type: str
+        required: false
+        default: ""
+        description: Path to existing public key file
+      bootstrap_ssh_key_generate:
+        type: bool
+        required: false
+        default: false
+        description: Generate new SSH keypair if no pubkey provided
+      bootstrap_ssh_key_local_dir:
+        type: str
+        required: false
+        default: "./ssh_keys"
+        description: Local directory to store generated keys
+      bootstrap_ssh_key_type:
+        type: str
+        required: false
+        default: "ed25519"
+        choices:
+          - ed25519
+          - rsa
+          - ecdsa
+        description: SSH key type to generate
+      bootstrap_ssh_key_exclusive:
+        type: bool
+        required: false
+        default: false
+        description: Remove other keys from authorized_keys
+
+      # SSH hardening
+      bootstrap_ssh_enabled:
+        type: bool
+        required: false
+        default: true
+        description: Enable SSH hardening
+      bootstrap_ssh_port:
+        type: int
+        required: false
+        default: 22
+        description: SSH port
+      bootstrap_ssh_password_auth:
+        type: bool
+        required: false
+        default: false
+        description: Allow SSH password authentication
+      bootstrap_ssh_root_login:
+        type: bool
+        required: false
+        default: false
+        description: Allow SSH root login
+      bootstrap_ssh_pubkey_auth:
+        type: bool
+        required: false
+        default: true
+        description: Enable SSH public key authentication
+
+      # Hostname
+      bootstrap_hostname_enabled:
+        type: bool
+        required: false
+        default: true
+        description: Enable hostname configuration
+      bootstrap_hostname:
+        type: str
+        required: false
+        default: "{{ inventory_hostname }}"
+        description: Hostname to set
+
+      # Network configuration
+      bootstrap_network_enabled:
+        type: bool
+        required: false
+        default: false
+        description: Enable static network configuration
+      bootstrap_network_interface:
+        type: str
+        required: false
+        default: ""
+        description: Network interface (auto-detect if empty)
+      bootstrap_network_connection:
+        type: str
+        required: false
+        default: ""
+        description: NetworkManager connection name (auto-detect if empty)
+      bootstrap_static_ip:
+        type: str
+        required: false
+        default: ""
+        description: Static IPv4 address with CIDR (e.g., 10.0.20.51/24)
+      bootstrap_gateway:
+        type: str
+        required: false
+        default: ""
+        description: IPv4 gateway address
+      bootstrap_dns4:
+        type: list
+        elements: str
+        required: false
+        default:
+          - "1.1.1.1"
+          - "1.0.0.1"
+        description: IPv4 DNS servers
+      bootstrap_dns4_ignore_auto:
+        type: bool
+        required: false
+        default: true
+        description: Ignore DNS from DHCP
+      bootstrap_static_ip6:
+        type: str
+        required: false
+        default: ""
+        description: Static IPv6 address with prefix (e.g., 2001:db8::51/64)
+      bootstrap_gateway6:
+        type: str
+        required: false
+        default: ""
+        description: IPv6 gateway address
+      bootstrap_dns6:
+        type: list
+        elements: str
+        required: false
+        default: []
+        description: IPv6 DNS servers
+      bootstrap_dns6_ignore_auto:
+        type: bool
+        required: false
+        default: true
+        description: Ignore DNS from DHCPv6/SLAAC
+      bootstrap_ipv6_dhcpv6:
+        type: bool
+        required: false
+        default: false
+        description: Enable DHCPv6 for public IPv6 (keeps static ULA if configured)
+      bootstrap_ipv6_disabled:
+        type: bool
+        required: false
+        default: true
+        description: Disable IPv6 completely
+
+      # Firewall configuration
+      bootstrap_firewall_enabled:
+        type: bool
+        required: false
+        default: false
+        description: Enable firewalld configuration
+      bootstrap_firewall_zone:
+        type: str
+        required: false
+        default: "public"
+        description: Default firewalld zone
+      bootstrap_firewall_services:
+        type: list
+        elements: str
+        required: false
+        default:
+          - ssh
+        description: Firewall services to allow
+      bootstrap_firewall_ports:
+        type: list
+        elements: dict
+        required: false
+        default: []
+        description: Custom ports to allow (list of {port, proto})
+      bootstrap_firewall_custom_zones:
+        type: list
+        elements: dict
+        required: false
+        default: []
+        description: Custom firewall zones with interfaces and ports
+      bootstrap_firewall_allow_icmp:
+        type: bool
+        required: false
+        default: true
+        description: Allow ICMP ping
+
+      # Expand filesystem
+      bootstrap_expand_fs_enabled:
+        type: bool
+        required: false
+        default: false
+        description: Expand root filesystem (for cloud images)
+
+      # Reboot
+      bootstrap_reboot_enabled:
+        type: bool
+        required: false
+        default: false
+        description: Reboot after configuration changes

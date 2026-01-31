@@ -1,0 +1,83 @@
+---
+# User creation tasks
+
+- name: Determine user group
+  ansible.builtin.set_fact:
+    _bootstrap_user_group: "{{ bootstrap_user_group if bootstrap_user_group | default('') | length > 0 else _bootstrap_sudo_group }}"
+
+- name: Create custom group
+  ansible.builtin.group:
+    name: "{{ _bootstrap_user_group }}"
+    state: present
+  when: bootstrap_user_create_group | default(false)
+
+- name: Build groups list
+  ansible.builtin.set_fact:
+    _bootstrap_user_groups: "{{ [_bootstrap_user_group] + (bootstrap_user_extra_groups | default([])) }}"
+
+- name: Create user
+  ansible.builtin.user:
+    name: "{{ bootstrap_user }}"
+    shell: "{{ bootstrap_user_shell | default('/bin/bash') }}"
+    groups: "{{ _bootstrap_user_groups }}"
+    append: true
+    create_home: true
+    password: "{{ bootstrap_user_password | default(omit) if bootstrap_user_password | default('') | length > 0 else omit }}"
+    state: present
+
+# SSH key generation (local)
+- name: Ensure local SSH keys directory exists
+  ansible.builtin.file:
+    path: "{{ bootstrap_ssh_key_local_dir }}"
+    state: directory
+    mode: "0700"
+  delegate_to: localhost
+  become: false
+  check_mode: false  # always create directory, even in check mode
+  when:
+    - bootstrap_ssh_key_generate | default(false)
+    - bootstrap_ssh_pubkey | default('') | length == 0
+
+- name: Generate SSH keypair locally
+  community.crypto.openssh_keypair:
+    path: "{{ bootstrap_ssh_key_local_dir }}/{{ inventory_hostname }}_{{ bootstrap_ssh_key_type }}"
+    type: "{{ bootstrap_ssh_key_type }}"
+    comment: "{{ bootstrap_user }}@{{ inventory_hostname }}"
+    state: present
+  delegate_to: localhost
+  become: false
+  check_mode: false  # always generate keys, even in check mode
+  register: _generated_key
+  when:
+    - bootstrap_ssh_key_generate | default(false)
+    - bootstrap_ssh_pubkey | default('') | length == 0
+
+- name: Set generated public key path
+  ansible.builtin.set_fact:
+    _bootstrap_ssh_pubkey: "{{ bootstrap_ssh_key_local_dir }}/{{ inventory_hostname }}_{{ bootstrap_ssh_key_type }}.pub"
+  when:
+    - bootstrap_ssh_key_generate | default(false)
+    - bootstrap_ssh_pubkey | default('') | length == 0
+
+- name: Set provided public key path
+  ansible.builtin.set_fact:
+    _bootstrap_ssh_pubkey: "{{ bootstrap_ssh_pubkey }}"
+  when: bootstrap_ssh_pubkey | default('') | length > 0
+
+# Deploy public key
+- name: Deploy SSH public key
+  ansible.posix.authorized_key:
+    user: "{{ bootstrap_user }}"
+    key: "{{ lookup('file', _bootstrap_ssh_pubkey) }}"
+    state: present
+    exclusive: "{{ bootstrap_ssh_key_exclusive | default(false) }}"
+  when: _bootstrap_ssh_pubkey is defined
+
+- name: Ensure user has passwordless sudo
+  ansible.builtin.lineinfile:
+    path: /etc/sudoers.d/{{ bootstrap_user }}
+    line: "{{ bootstrap_user }} ALL=(ALL) NOPASSWD:ALL"
+    create: true
+    mode: "0440"
+    validate: "visudo -cf %s"
+  when: bootstrap_user_nopasswd_sudo | default(true)

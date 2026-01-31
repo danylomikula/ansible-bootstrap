@@ -1,0 +1,80 @@
+---
+# User configuration.
+bootstrap_user_enabled: true
+bootstrap_user: "ansible"
+bootstrap_user_password: ""  # hashed password (mkpasswd -m sha-512)
+bootstrap_user_group: ""  # auto-detect: wheel (RedHat) / sudo (Debian)
+bootstrap_user_extra_groups: []
+#  - docker
+#  - libvirt
+bootstrap_user_create_group: false
+bootstrap_user_shell: "/bin/bash"
+bootstrap_user_nopasswd_sudo: true  # allow passwordless sudo
+
+# SSH key configuration.
+bootstrap_ssh_pubkey: ""  # path to existing public key
+bootstrap_ssh_key_generate: true  # generate new keypair if no pubkey
+bootstrap_ssh_key_local_dir: "./ssh_keys"  # where to store generated keys
+bootstrap_ssh_key_type: "ed25519"  # ed25519, rsa, ecdsa
+bootstrap_ssh_key_exclusive: false  # remove other keys from authorized_keys
+
+# SSH hardening.
+bootstrap_ssh_enabled: true
+bootstrap_ssh_port: 22
+bootstrap_ssh_password_auth: false
+bootstrap_ssh_root_login: false
+bootstrap_ssh_pubkey_auth: true
+
+# Hostname configuration.
+bootstrap_hostname_enabled: true
+bootstrap_hostname: "{{ inventory_hostname }}"
+
+# Network configuration (static IP).
+# Set these per-host in inventory host_vars:
+#   bootstrap_static_ip: "10.0.20.51/24"
+#   bootstrap_gateway: "10.0.20.1"
+#   bootstrap_static_ip6: "2001:db8::51/64"
+#   bootstrap_gateway6: "2001:db8::1"
+bootstrap_network_enabled: true
+bootstrap_network_interface: ""  # auto-detect if empty
+bootstrap_network_connection: ""  # nmcli connection name, auto-detect if empty
+# IPv4 DNS
+bootstrap_dns4:
+  - "1.1.1.1"
+  - "1.0.0.1"
+bootstrap_dns4_ignore_auto: true  # ignore DNS from DHCP
+# IPv6 DNS
+bootstrap_dns6:
+  - "2606:4700:4700::1111"
+  - "2606:4700:4700::1001"
+bootstrap_dns6_ignore_auto: true  # ignore DNS from DHCPv6/SLAAC
+# Enable DHCPv6 to get public IPv6 from router (+ keeps static ULA if configured)
+bootstrap_ipv6_dhcpv6: true
+# Set to false to enable IPv6
+bootstrap_ipv6_disabled: true
+
+# Firewall configuration.
+bootstrap_firewall_enabled: false
+bootstrap_firewall_zone: "public"
+bootstrap_firewall_services:
+  - ssh
+  - http
+  - https
+  - dhcp
+  - dhcpv6
+  - dns
+bootstrap_firewall_ports: []
+#  - { port: 8080, proto: tcp }
+#  - { port: 53, proto: udp }
+bootstrap_firewall_custom_zones:
+  - name: ftl
+    interface: lo
+    ports:
+      - { port: 4711, proto: tcp }
+bootstrap_firewall_allow_icmp: true
+
+# Expand filesystem.
+bootstrap_expand_fs_enabled: true
+
+# Reboot after changes.
+bootstrap_reboot_enabled: true

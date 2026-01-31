@@ -1,0 +1,32 @@
+# Ansible
+*.retry
+inventory.ini
+.ansible
+
+# SSH keys (generated)
+ssh_keys/
+
+# Vault password
+.vault_pass
+
+# Molecule
+molecule/.ssh_keys/
+.molecule/
+.cache/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db

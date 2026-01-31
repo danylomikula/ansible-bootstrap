@@ -1,0 +1,21 @@
+---
+# Hostname configuration tasks
+# Note: Skipped in containers (Docker) as /etc/hostname and /etc/hosts are read-only
+
+- name: Check if running in container
+  ansible.builtin.stat:
+    path: /.dockerenv
+  register: _dockerenv
+
+- name: Set hostname
+  ansible.builtin.hostname:
+    name: "{{ bootstrap_hostname }}"
+  when: not _dockerenv.stat.exists
+
+- name: Update /etc/hosts with hostname
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    regexp: "^127\\.0\\.1\\.1\\s+"
+    line: "127.0.1.1\t{{ bootstrap_hostname }}"
+    state: present
+  when: not _dockerenv.stat.exists

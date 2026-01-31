@@ -1,0 +1,153 @@
+---
+# Firewall configuration tasks (firewalld - universal)
+# Note: Skipped in containers (Docker) as firewalld requires kernel access
+# Changes applied with immediate: true, reboot at end applies permanent config
+
+- name: Check if running in container
+  ansible.builtin.stat:
+    path: /.dockerenv
+  register: _dockerenv
+
+- name: Skip firewall in container
+  ansible.builtin.debug:
+    msg: "Firewall configuration skipped in container"
+  when: _dockerenv.stat.exists
+
+- name: Install firewalld (Debian/Ubuntu)
+  ansible.builtin.apt:
+    name: firewalld
+    state: present
+    update_cache: true
+  when:
+    - not _dockerenv.stat.exists
+    - ansible_facts['os_family'] == 'Debian'
+
+- name: Install firewalld (RedHat)
+  ansible.builtin.dnf:
+    name: firewalld
+    state: present
+  when:
+    - not _dockerenv.stat.exists
+    - ansible_facts['os_family'] == 'RedHat'
+
+- name: Start and enable firewalld
+  ansible.builtin.systemd:
+    name: firewalld
+    state: started
+    enabled: true
+  when: not _dockerenv.stat.exists
+
+# Custom zones - must reload after creating before they can be used
+- name: Create custom firewall zones
+  ansible.posix.firewalld:
+    zone: "{{ item.name }}"
+    permanent: true
+    state: present
+  loop: "{{ bootstrap_firewall_custom_zones | default([]) }}"
+  when:
+    - not _dockerenv.stat.exists
+    - (bootstrap_firewall_custom_zones | default([])) | length > 0
+  register: _custom_zones_created
+
+- name: Reload firewalld to apply new zones
+  ansible.builtin.command:
+    cmd: firewall-cmd --reload
+  when:
+    - not _dockerenv.stat.exists
+    - _custom_zones_created is defined
+    - _custom_zones_created.changed | default(false)
+  changed_when: true
+
+- name: Assign interfaces to custom zones
+  ansible.posix.firewalld:
+    zone: "{{ item.name }}"
+    interface: "{{ item.interface }}"
+    permanent: true
+    immediate: true
+    state: enabled
+  loop: "{{ bootstrap_firewall_custom_zones | default([]) }}"
+  when:
+    - not _dockerenv.stat.exists
+    - (bootstrap_firewall_custom_zones | default([])) | length > 0
+    - item.interface is defined
+
+- name: Allow ports in custom zones
+  ansible.posix.firewalld:
+    zone: "{{ item.0.name }}"
+    port: "{{ item.1.port }}/{{ item.1.proto }}"
+    permanent: true
+    immediate: true
+    state: enabled
+  loop: "{{ bootstrap_firewall_custom_zones | default([]) | subelements('ports', skip_missing=True) }}"
+  when:
+    - not _dockerenv.stat.exists
+    - (bootstrap_firewall_custom_zones | default([])) | length > 0
+
+- name: Configure firewall zone
+  ansible.posix.firewalld:
+    zone: "{{ bootstrap_firewall_zone }}"
+    state: enabled
+    permanent: true
+    immediate: true
+  when: not _dockerenv.stat.exists
+
+- name: Allow specified services
+  ansible.posix.firewalld:
+    service: "{{ item }}"
+    zone: "{{ bootstrap_firewall_zone }}"
+    permanent: true
+    immediate: true
+    state: enabled
+  loop: "{{ bootstrap_firewall_services }}"
+  when:
+    - not _dockerenv.stat.exists
+    - (bootstrap_firewall_services | default([])) | length > 0
+
+- name: Allow specified ports
+  ansible.posix.firewalld:
+    port: "{{ item.port }}/{{ item.proto }}"
+    zone: "{{ bootstrap_firewall_zone }}"
+    permanent: true
+    immediate: true
+    state: enabled
+  loop: "{{ bootstrap_firewall_ports }}"
+  when:
+    - not _dockerenv.stat.exists
+    - (bootstrap_firewall_ports | default([])) | length > 0
+
+- name: Allow ICMP echo-request
+  ansible.posix.firewalld:
+    icmp_block: echo-request
+    zone: "{{ bootstrap_firewall_zone }}"
+    permanent: true
+    immediate: true
+    state: disabled
+  when:
+    - not _dockerenv.stat.exists
+    - bootstrap_firewall_allow_icmp | default(true)
+
+- name: Block ICMP echo-request
+  ansible.posix.firewalld:
+    icmp_block: echo-request
+    zone: "{{ bootstrap_firewall_zone }}"
+    permanent: true
+    immediate: true
+    state: enabled
+  when:
+    - not _dockerenv.stat.exists
+    - not (bootstrap_firewall_allow_icmp | default(true))
+
+- name: Check current default zone
+  ansible.builtin.command:
+    cmd: firewall-cmd --get-default-zone
+  register: _firewall_current_zone
+  changed_when: false
+  when: not _dockerenv.stat.exists
+
+- name: Set default zone
+  ansible.builtin.command:
+    cmd: firewall-cmd --set-default-zone={{ bootstrap_firewall_zone }}
+  when:
+    - not _dockerenv.stat.exists
+    - _firewall_current_zone.stdout | default('') != bootstrap_firewall_zone
+  changed_when: true

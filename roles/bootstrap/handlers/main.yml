@@ -1,0 +1,12 @@
+---
+# Handlers for bootstrap role
+
+- name: Restart sshd
+  ansible.builtin.systemd:
+    name: "{{ 'ssh' if ansible_facts['os_family'] == 'Debian' else 'sshd' }}"
+    state: restarted
+
+- name: Reboot system
+  ansible.builtin.reboot:
+    msg: "Ansible triggered reboot"
+    reboot_timeout: 300
