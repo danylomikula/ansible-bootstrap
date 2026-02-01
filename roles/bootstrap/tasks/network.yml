@@ -2,7 +2,7 @@
 # Network configuration tasks (static IP via NetworkManager)
 
 - name: Check if NetworkManager is available
-  ansible.builtin.command: which nmcli
+  ansible.builtin.command: nmcli -v
   register: _bootstrap_nmcli_check
   changed_when: false
   failed_when: false
@@ -43,6 +43,12 @@
 - name: Set connection name fact
   ansible.builtin.set_fact:
     _bootstrap_network_connection: "{{ bootstrap_network_connection if bootstrap_network_connection | default('') | length > 0 else _bootstrap_nmcli_connection.stdout }}"
+
+# Fail fast if we cannot determine a connection name
+- name: Ensure network connection name is set
+  ansible.builtin.fail:
+    msg: "Unable to determine NetworkManager connection name. Set bootstrap_network_connection explicitly."
+  when: _bootstrap_network_connection | default('') | length == 0
 
 # Network changes applied on reboot - no need to restart connection mid-playbook
 - name: Configure static IPv4
