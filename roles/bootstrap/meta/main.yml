@@ -233,7 +233,9 @@ argument_specs:
         elements: dict
         required: false
         default: []
-        description: Custom firewall zones with interfaces and ports
+        description:
+          - Custom firewall zones with interfaces and ports
+          - "Example: [{ name: ftl, interface: lo, ports: [{ port: 4711, proto: tcp }] }]"
       bootstrap_firewall_allow_icmp:
         type: bool
         required: false
