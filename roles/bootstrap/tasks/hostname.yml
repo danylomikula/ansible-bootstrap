@@ -5,12 +5,12 @@
 - name: Check if running in container
   ansible.builtin.stat:
     path: /.dockerenv
-  register: _dockerenv
+  register: _bootstrap_dockerenv
 
 - name: Set hostname
   ansible.builtin.hostname:
     name: "{{ bootstrap_hostname }}"
-  when: not _dockerenv.stat.exists
+  when: not _bootstrap_dockerenv.stat.exists
 
 - name: Update /etc/hosts with hostname
   ansible.builtin.lineinfile:
@@ -18,4 +18,4 @@
     regexp: "^127\\.0\\.1\\.1\\s+"
     line: "127.0.1.1\t{{ bootstrap_hostname }}"
     state: present
-  when: not _dockerenv.stat.exists
+  when: not _bootstrap_dockerenv.stat.exists

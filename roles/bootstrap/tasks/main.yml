@@ -26,7 +26,7 @@
 
 - name: Include firewall tasks
   ansible.builtin.include_tasks: firewall.yml
-  when: bootstrap_firewall_enabled | default(true)
+  when: bootstrap_firewall_enabled | default(false) | bool
   tags: ['bootstrap', 'firewall']
 
 - name: Include expand filesystem tasks
