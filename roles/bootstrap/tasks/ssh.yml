@@ -1,0 +1,66 @@
+---
+# SSH hardening tasks
+
+- name: Install openssh-server (Debian/Ubuntu)
+  ansible.builtin.apt:
+    name: openssh-server
+    state: present
+    update_cache: true
+  when: ansible_facts['os_family'] == 'Debian'
+
+- name: Install openssh-server (RedHat)
+  ansible.builtin.dnf:
+    name: openssh-server
+    state: present
+  when: ansible_facts['os_family'] == 'RedHat'
+
+- name: Set SSH service name
+  ansible.builtin.set_fact:
+    _ssh_service_name: "{{ 'ssh' if ansible_facts['os_family'] == 'Debian' else 'sshd' }}"
+
+- name: Ensure SSH service is running
+  ansible.builtin.systemd:
+    name: "{{ _ssh_service_name }}"
+    state: started
+    enabled: true
+
+- name: Configure SSH port
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^#?Port "
+    line: "Port {{ bootstrap_ssh_port }}"
+    state: present
+  notify: Restart sshd
+  when: bootstrap_ssh_port | default(22) != 22
+
+- name: Disable password authentication
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^#?PasswordAuthentication "
+    line: "PasswordAuthentication {{ 'yes' if bootstrap_ssh_password_auth else 'no' }}"
+    state: present
+  notify: Restart sshd
+
+- name: Disable root login
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^#?PermitRootLogin "
+    line: "PermitRootLogin {{ 'yes' if bootstrap_ssh_root_login else 'no' }}"
+    state: present
+  notify: Restart sshd
+
+- name: Enable public key authentication
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^#?PubkeyAuthentication "
+    line: "PubkeyAuthentication {{ 'yes' if bootstrap_ssh_pubkey_auth else 'no' }}"
+    state: present
+  notify: Restart sshd
+
+- name: Disable empty passwords
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^#?PermitEmptyPasswords "
+    line: "PermitEmptyPasswords no"
+    state: present
+  notify: Restart sshd

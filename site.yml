@@ -1,0 +1,9 @@
+---
+# Bootstrap playbook
+# Usage: ansible-playbook -i inventory.ini site.yml
+
+- name: Bootstrap servers
+  hosts: all
+  become: true
+  roles:
+    - bootstrap

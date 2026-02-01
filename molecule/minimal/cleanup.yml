@@ -1,0 +1,6 @@
+---
+# Empty cleanup playbook
+- name: Cleanup
+  hosts: all
+  gather_facts: false
+  tasks: []

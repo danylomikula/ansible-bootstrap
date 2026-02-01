@@ -1,0 +1,76 @@
+---
+# Expand filesystem tasks
+
+- name: Check if raspi-config exists (Raspberry Pi)
+  ansible.builtin.stat:
+    path: /usr/bin/raspi-config
+  register: _raspi_config
+
+- name: Expand filesystem (Raspberry Pi)
+  ansible.builtin.command: raspi-config --expand-rootfs
+  when: _raspi_config.stat.exists
+  notify: Reboot system
+  register: _expand_rpi
+  changed_when: _expand_rpi.rc == 0
+
+- name: Get root partition device
+  ansible.builtin.shell: |
+    findmnt -n -o SOURCE /
+  register: _root_device
+  changed_when: false
+  when: not _raspi_config.stat.exists
+
+- name: Extract disk and partition number
+  ansible.builtin.set_fact:
+    _root_disk: "{{ _root_device.stdout | regex_replace('p?[0-9]+$', '') }}"
+    _root_partition: "{{ _root_device.stdout | regex_search('[0-9]+$') }}"
+  when: not _raspi_config.stat.exists
+
+- name: Install growpart (Debian/Ubuntu)
+  ansible.builtin.apt:
+    name: cloud-guest-utils
+    state: present
+    update_cache: true
+  when:
+    - not _raspi_config.stat.exists
+    - ansible_facts['os_family'] == 'Debian'
+
+- name: Install growpart (RedHat)
+  ansible.builtin.dnf:
+    name: cloud-utils-growpart
+    state: present
+  when:
+    - not _raspi_config.stat.exists
+    - ansible_facts['os_family'] == 'RedHat'
+
+- name: Grow partition
+  ansible.builtin.command: growpart {{ _root_disk }} {{ _root_partition }}
+  register: _growpart
+  changed_when: "'CHANGED' in _growpart.stdout"
+  failed_when:
+    - _growpart.rc != 0
+    - "'NOCHANGE' not in _growpart.stdout"
+  when: not _raspi_config.stat.exists
+
+- name: Get filesystem type
+  ansible.builtin.shell: |
+    findmnt -n -o FSTYPE /
+  register: _fs_type
+  changed_when: false
+  when: not _raspi_config.stat.exists
+
+- name: Resize ext4 filesystem
+  ansible.builtin.command: resize2fs {{ _root_device.stdout }}
+  changed_when: true
+  when:
+    - not _raspi_config.stat.exists
+    - _fs_type.stdout == 'ext4'
+    - _growpart.changed | default(false)
+
+- name: Resize XFS filesystem
+  ansible.builtin.command: xfs_growfs /
+  changed_when: true
+  when:
+    - not _raspi_config.stat.exists
+    - _fs_type.stdout == 'xfs'
+    - _growpart.changed | default(false)

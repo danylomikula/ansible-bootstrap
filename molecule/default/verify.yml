@@ -1,0 +1,70 @@
+---
+- name: Verify
+  hosts: all
+  become: true
+  gather_facts: true
+  tasks:
+    - name: Check if running in container
+      ansible.builtin.stat:
+        path: /.dockerenv
+      register: _dockerenv
+
+    - name: Verify user exists
+      ansible.builtin.user:
+        name: testadmin
+        state: present
+      check_mode: true
+      register: user_check
+      failed_when: user_check.changed
+
+    - name: Verify user is in correct group
+      ansible.builtin.shell: |
+        groups testadmin | grep -E '(sudo|wheel)'
+      register: groups_check
+      changed_when: false
+      failed_when: groups_check.rc != 0
+
+    - name: Verify sudoers file exists
+      ansible.builtin.stat:
+        path: /etc/sudoers.d/testadmin
+      register: sudoers_file
+      failed_when: not sudoers_file.stat.exists
+
+    - name: Verify SSH password authentication disabled
+      ansible.builtin.shell: |
+        grep -E '^PasswordAuthentication no' /etc/ssh/sshd_config
+      register: ssh_password
+      changed_when: false
+      failed_when: ssh_password.rc != 0
+
+    - name: Verify SSH root login disabled
+      ansible.builtin.shell: |
+        grep -E '^PermitRootLogin no' /etc/ssh/sshd_config
+      register: ssh_root
+      changed_when: false
+      failed_when: ssh_root.rc != 0
+
+    - name: Verify hostname (skip in container)
+      ansible.builtin.debug:
+        msg: "Hostname verification skipped in container"
+      when: _dockerenv.stat.exists
+
+    - name: Verify firewalld (skip in container)
+      ansible.builtin.debug:
+        msg: "Firewall verification skipped in container"
+      when: _dockerenv.stat.exists
+
+    - name: Print verification summary
+      ansible.builtin.debug:
+        msg:
+          - "===================================="
+          - "VERIFICATION PASSED"
+          - "===================================="
+          - "User: testadmin (created)"
+          - "Groups: {{ groups_check.stdout }}"
+          - "Sudoers: OK"
+          - "SSH Password Auth: disabled"
+          - "SSH Root Login: disabled"
+          - "Hostname: skipped (container)"
+          - "Firewall: skipped (container)"
+          - "===================================="

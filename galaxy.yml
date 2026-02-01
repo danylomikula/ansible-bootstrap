@@ -1,0 +1,52 @@
+---
+namespace: danylomikula
+name: ansible_bootstrap
+version: 1.0.0
+readme: README.md
+authors:
+  - Danylo Mikula <dan@mikula.dev>
+description: >-
+  Ansible collection for initial server bootstrap: user management, SSH hardening,
+  static networking, and firewalld configuration.
+license_file: LICENSE
+tags:
+  - bootstrap
+  - server
+  - hardening
+  - ssh
+  - firewall
+  - network
+  - user
+  - security
+  - debian
+  - ubuntu
+  - rockylinux
+dependencies:
+  community.crypto: ">=2.0.0"
+  community.general: ">=11.0.0"
+  ansible.posix: ">=1.5.0"
+repository: https://github.com/danylomikula/ansible-bootstrap
+documentation: https://github.com/danylomikula/ansible-bootstrap/blob/main/README.md
+homepage: https://github.com/danylomikula/ansible-bootstrap
+issues: https://github.com/danylomikula/ansible-bootstrap/issues
+build_ignore:
+  - .git
+  - .github
+  - .vscode
+  - .ansible
+  - .claude
+  - .ansible-lint
+  - .gitignore
+  - .pre-commit-config.yaml
+  - .release-please-manifest.json
+  - release-please-config.json
+  - requirements.yml
+  - "*.tar.gz"
+  - molecule
+  - inventory.ini
+  - inventory.ini.example
+  - group_vars
+  - scripts
+  - ansible.cfg
+  - CHANGELOG.md
+  - ssh_keys
