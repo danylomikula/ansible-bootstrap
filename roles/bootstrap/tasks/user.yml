@@ -47,7 +47,7 @@
   delegate_to: localhost
   become: false
   check_mode: false  # always generate keys, even in check mode
-  register: _generated_key
+  register: _bootstrap_generated_key
   when:
     - bootstrap_ssh_key_generate | default(false)
     - bootstrap_ssh_pubkey | default('') | length == 0

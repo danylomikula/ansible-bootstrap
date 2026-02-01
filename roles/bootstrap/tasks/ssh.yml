@@ -16,11 +16,11 @@
 
 - name: Set SSH service name
   ansible.builtin.set_fact:
-    _ssh_service_name: "{{ 'ssh' if ansible_facts['os_family'] == 'Debian' else 'sshd' }}"
+    _bootstrap_ssh_service_name: "{{ 'ssh' if ansible_facts['os_family'] == 'Debian' else 'sshd' }}"
 
 - name: Ensure SSH service is running
   ansible.builtin.systemd:
-    name: "{{ _ssh_service_name }}"
+    name: "{{ _bootstrap_ssh_service_name }}"
     state: started
     enabled: true
 

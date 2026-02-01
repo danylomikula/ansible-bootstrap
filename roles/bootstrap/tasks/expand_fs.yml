@@ -4,27 +4,27 @@
 - name: Check if raspi-config exists (Raspberry Pi)
   ansible.builtin.stat:
     path: /usr/bin/raspi-config
-  register: _raspi_config
+  register: _bootstrap_raspi_config
 
 - name: Expand filesystem (Raspberry Pi)
   ansible.builtin.command: raspi-config --expand-rootfs
-  when: _raspi_config.stat.exists
+  when: _bootstrap_raspi_config.stat.exists
   notify: Reboot system
-  register: _expand_rpi
-  changed_when: _expand_rpi.rc == 0
+  register: _bootstrap_expand_rpi
+  changed_when: _bootstrap_expand_rpi.rc == 0
 
 - name: Get root partition device
   ansible.builtin.shell: |
     findmnt -n -o SOURCE /
-  register: _root_device
+  register: _bootstrap_root_device
   changed_when: false
-  when: not _raspi_config.stat.exists
+  when: not _bootstrap_raspi_config.stat.exists
 
 - name: Extract disk and partition number
   ansible.builtin.set_fact:
-    _root_disk: "{{ _root_device.stdout | regex_replace('p?[0-9]+$', '') }}"
-    _root_partition: "{{ _root_device.stdout | regex_search('[0-9]+$') }}"
-  when: not _raspi_config.stat.exists
+    _bootstrap_root_disk: "{{ _bootstrap_root_device.stdout | regex_replace('p?[0-9]+$', '') }}"
+    _bootstrap_root_partition: "{{ _bootstrap_root_device.stdout | regex_search('[0-9]+$') }}"
+  when: not _bootstrap_raspi_config.stat.exists
 
 - name: Install growpart (Debian/Ubuntu)
   ansible.builtin.apt:
@@ -32,7 +32,7 @@
     state: present
     update_cache: true
   when:
-    - not _raspi_config.stat.exists
+    - not _bootstrap_raspi_config.stat.exists
     - ansible_facts['os_family'] == 'Debian'
 
 - name: Install growpart (RedHat)
@@ -40,37 +40,37 @@
     name: cloud-utils-growpart
     state: present
   when:
-    - not _raspi_config.stat.exists
+    - not _bootstrap_raspi_config.stat.exists
     - ansible_facts['os_family'] == 'RedHat'
 
 - name: Grow partition
-  ansible.builtin.command: growpart {{ _root_disk }} {{ _root_partition }}
-  register: _growpart
-  changed_when: "'CHANGED' in _growpart.stdout"
+  ansible.builtin.command: growpart {{ _bootstrap_root_disk }} {{ _bootstrap_root_partition }}
+  register: _bootstrap_growpart
+  changed_when: "'CHANGED' in _bootstrap_growpart.stdout"
   failed_when:
-    - _growpart.rc != 0
-    - "'NOCHANGE' not in _growpart.stdout"
-  when: not _raspi_config.stat.exists
+    - _bootstrap_growpart.rc != 0
+    - "'NOCHANGE' not in _bootstrap_growpart.stdout"
+  when: not _bootstrap_raspi_config.stat.exists
 
 - name: Get filesystem type
   ansible.builtin.shell: |
     findmnt -n -o FSTYPE /
-  register: _fs_type
+  register: _bootstrap_fs_type
   changed_when: false
-  when: not _raspi_config.stat.exists
+  when: not _bootstrap_raspi_config.stat.exists
 
 - name: Resize ext4 filesystem
-  ansible.builtin.command: resize2fs {{ _root_device.stdout }}
+  ansible.builtin.command: resize2fs {{ _bootstrap_root_device.stdout }}
   changed_when: true
   when:
-    - not _raspi_config.stat.exists
-    - _fs_type.stdout == 'ext4'
-    - _growpart.changed | default(false)
+    - not _bootstrap_raspi_config.stat.exists
+    - _bootstrap_fs_type.stdout == 'ext4'
+    - _bootstrap_growpart.changed | default(false)
 
 - name: Resize XFS filesystem
   ansible.builtin.command: xfs_growfs /
   changed_when: true
   when:
-    - not _raspi_config.stat.exists
-    - _fs_type.stdout == 'xfs'
-    - _growpart.changed | default(false)
+    - not _bootstrap_raspi_config.stat.exists
+    - _bootstrap_fs_type.stdout == 'xfs'
+    - _bootstrap_growpart.changed | default(false)
