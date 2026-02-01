@@ -53,7 +53,13 @@ bootstrap_firewall_zone: "public"
 bootstrap_firewall_services:
   - ssh
 bootstrap_firewall_ports: []  # e.g., [{ port: 8080, proto: tcp }]
-bootstrap_firewall_custom_zones: []  # e.g., [{ name: ftl, interface: lo, ports: [{ port: 4711, proto: tcp }] }]
+bootstrap_firewall_custom_zones: []
+# Example:
+#   - name: ftl
+#     interface: lo
+#     ports:
+#       - port: 4711
+#         proto: tcp
 bootstrap_firewall_allow_icmp: true
 
 # Expand filesystem

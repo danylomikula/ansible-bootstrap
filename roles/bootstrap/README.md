@@ -107,7 +107,7 @@ ansible_user=admin
 | `bootstrap_firewall_zone` | `"public"` | Default firewalld zone |
 | `bootstrap_firewall_services` | `["ssh"]` | Allowed services |
 | `bootstrap_firewall_ports` | `[]` | Custom ports `[{port: 8080, proto: tcp}]` |
-| `bootstrap_firewall_custom_zones` | `[]` | Custom zones with interfaces and ports |
+| `bootstrap_firewall_custom_zones` | `[]` | Custom zones with interfaces and ports (e.g., `[{ name: ftl, interface: lo, ports: [{ port: 4711, proto: tcp }] }]`) |
 | `bootstrap_firewall_allow_icmp` | `true` | Allow ICMP ping |
 
 ### Other
@@ -130,12 +130,31 @@ ansible_user=admin
   vars:
     bootstrap_user: "admin"
     bootstrap_ssh_key_generate: true
+    bootstrap_network_enabled: true
+    bootstrap_dns4:
+      - "1.1.1.1"
+      - "1.0.0.1"
+    bootstrap_dns6:
+      - "2606:4700:4700::1111"
+      - "2606:4700:4700::1001"
+    bootstrap_ipv6_disabled: false
+    bootstrap_ipv6_dhcpv6: true
+    bootstrap_ipv6_method: "dhcp"
     bootstrap_firewall_enabled: true
+    bootstrap_firewall_zone: "public"
     bootstrap_firewall_services:
       - ssh
       - http
       - https
-    bootstrap_reboot_enabled: true
+      - dns
+    bootstrap_firewall_custom_zones:
+      - name: ftl
+        interface: lo
+        ports:
+          - port: 4711
+            proto: tcp
+    bootstrap_firewall_allow_icmp: true
+    bootstrap_expand_fs_enabled: true
   roles:
     - danylomikula.ansible_bootstrap.bootstrap
 ```
@@ -164,7 +183,8 @@ bootstrap_firewall_custom_zones:
   - name: ftl
     interface: lo
     ports:
-      - { port: 4711, proto: tcp }
+      - port: 4711
+        proto: tcp
 ```
 
 ## Testing
