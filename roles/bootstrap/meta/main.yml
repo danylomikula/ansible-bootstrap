@@ -188,7 +188,16 @@ argument_specs:
         type: bool
         required: false
         default: false
-        description: Enable DHCPv6 for public IPv6 (keeps static ULA if configured)
+        description: Enable DHCPv6/SLAAC for public IPv6 (keeps static ULA if configured)
+      bootstrap_ipv6_method:
+        type: str
+        required: false
+        default: "auto"
+        choices:
+          - auto
+          - dhcp
+          - link-local
+        description: IPv6 method when bootstrap_ipv6_dhcpv6 is true (auto=SLAAC, dhcp=DHCPv6)
       bootstrap_ipv6_disabled:
         type: bool
         required: false

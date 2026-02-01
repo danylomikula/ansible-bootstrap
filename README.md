@@ -22,6 +22,21 @@ Universal server bootstrap playbook for initial server configuration.
 ansible-galaxy collection install danylomikula.ansible_bootstrap
 ```
 
+Or add to your project's `requirements.yml`:
+
+```yaml
+---
+collections:
+  - name: danylomikula.ansible_bootstrap
+    version: ">=1.0.0"
+```
+
+Then install:
+
+```bash
+ansible-galaxy collection install -r requirements.yml
+```
+
 ### From Source
 
 ```bash

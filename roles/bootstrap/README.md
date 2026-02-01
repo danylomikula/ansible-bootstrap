@@ -2,12 +2,6 @@
 
 Universal server bootstrap role for initial server configuration.
 
-## Installation
-
-```bash
-ansible-galaxy collection install danylomikula.ansible_bootstrap
-```
-
 ## Features
 
 - **User Management**: Create admin user with sudo access
@@ -24,12 +18,21 @@ ansible-galaxy collection install danylomikula.ansible_bootstrap
 - Ubuntu 24.04
 - Rocky Linux 10
 
+## Installation
+
+```bash
+ansible-galaxy collection install danylomikula.ansible_bootstrap
+```
+
 ## Requirements
 
 Ansible collections (install via `ansible-galaxy collection install -r requirements.yml`):
 - `ansible.posix >= 1.5.0`
 - `community.general >= 11.0.0`
 - `community.crypto >= 2.0.0`
+
+For development/testing only:
+- `community.docker >= 3.0.0` (required for molecule tests)
 
 ## First Run
 
@@ -92,7 +95,8 @@ ansible_user=admin
 | `bootstrap_gateway6` | `""` | IPv6 gateway |
 | `bootstrap_dns6` | `[]` | IPv6 DNS servers |
 | `bootstrap_dns6_ignore_auto` | `true` | Ignore DNS from DHCPv6/SLAAC |
-| `bootstrap_ipv6_dhcpv6` | `false` | Enable DHCPv6 for public IPv6 |
+| `bootstrap_ipv6_dhcpv6` | `false` | Enable DHCPv6/SLAAC for public IPv6 |
+| `bootstrap_ipv6_method` | `"auto"` | IPv6 method: auto (SLAAC), dhcp (DHCPv6), link-local |
 | `bootstrap_ipv6_disabled` | `true` | Disable IPv6 completely |
 
 ### Firewall Configuration

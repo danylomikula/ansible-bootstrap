@@ -43,8 +43,9 @@ bootstrap_static_ip6: ""  # e.g., "2001:db8::51/64"
 bootstrap_gateway6: ""  # e.g., "2001:db8::1"
 bootstrap_dns6: []  # e.g., ["2606:4700:4700::1111"]
 bootstrap_dns6_ignore_auto: true  # ignore DNS from DHCPv6/SLAAC
-bootstrap_ipv6_dhcpv6: false  # enable DHCPv6 for public IPv6 (+ optional static ULA)
-bootstrap_ipv6_disabled: true  # set to true to disable IPv6
+bootstrap_ipv6_dhcpv6: false  # enable DHCPv6/SLAAC for public IPv6 (+ optional static ULA)
+bootstrap_ipv6_method: "auto"  # auto (SLAAC), dhcp (DHCPv6), link-local
+bootstrap_ipv6_disabled: true  # disable IPv6 by default
 
 # Firewall
 bootstrap_firewall_enabled: false
@@ -59,4 +60,4 @@ bootstrap_firewall_allow_icmp: true
 bootstrap_expand_fs_enabled: false
 
 # Reboot after changes
-bootstrap_reboot_enabled: false
+bootstrap_reboot_enabled: true

@@ -74,14 +74,14 @@
     - bootstrap_gateway6 | default('') | length > 0
     - not (bootstrap_ipv6_dhcpv6 | default(false))
 
-# Auto mode with additional static address (for DHCPv6 + ULA)
-- name: Configure IPv6 with SLAAC (auto mode)
+# Auto mode with additional static address (for DHCPv6/SLAAC + ULA)
+- name: Configure IPv6 with DHCPv6/SLAAC
   community.general.nmcli:
     conn_name: "{{ _network_connection }}"
     type: ethernet
     dns6: "{{ bootstrap_dns6 }}"
     dns6_ignore_auto: "{{ bootstrap_dns6_ignore_auto | default(true) }}"
-    method6: dhcp
+    method6: "{{ bootstrap_ipv6_method | default('auto') }}"
     state: present
   when:
     - bootstrap_ipv6_dhcpv6 | default(false)
