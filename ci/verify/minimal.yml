@@ -1,0 +1,19 @@
+---
+- name: Verify CI Scenario - Minimal
+  hosts: targets
+  become: true
+  gather_facts: true
+  tasks:
+    - name: Verify user exists
+      ansible.builtin.user:
+        name: minimaluser
+        state: present
+      check_mode: true
+      register: user_check
+      failed_when: user_check.changed
+
+    - name: Verify passwordless sudo file is absent
+      ansible.builtin.stat:
+        path: /etc/sudoers.d/minimaluser
+      register: sudoers_file
+      failed_when: sudoers_file.stat.exists

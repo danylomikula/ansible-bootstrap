@@ -1,0 +1,22 @@
+---
+- name: Verify CI Scenario - Reboot
+  hosts: targets
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Wait for host to come back after reboot
+      ansible.builtin.wait_for_connection:
+        delay: 10
+        timeout: 420
+
+    - name: Read uptime in seconds
+      ansible.builtin.command:
+        cmd: awk '{print int($1)}' /proc/uptime
+      register: uptime_seconds
+      changed_when: false
+
+    - name: Verify reboot happened recently
+      ansible.builtin.assert:
+        that:
+          - (uptime_seconds.stdout | int) < 900
+        fail_msg: "Uptime is too high, expected host reboot during scenario."

@@ -1,0 +1,18 @@
+---
+- name: CI Scenario - Minimal
+  hosts: targets
+  become: true
+  vars:
+    bootstrap_user: "minimaluser"
+    bootstrap_user_group: ""
+    bootstrap_user_nopasswd_sudo: false
+    bootstrap_ssh_key_generate: false
+    bootstrap_ssh_pubkey: ""
+    bootstrap_ssh_enabled: false
+    bootstrap_hostname_enabled: false
+    bootstrap_firewall_enabled: false
+    bootstrap_network_enabled: false
+    bootstrap_expand_fs_enabled: false
+    bootstrap_reboot_enabled: false
+  roles:
+    - bootstrap

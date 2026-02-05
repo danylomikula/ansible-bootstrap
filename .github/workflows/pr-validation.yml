@@ -5,6 +5,10 @@ on:
     branches:
       - main
 
+concurrency:
+  group: pr-validation-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   ansible-lint:
     name: Ansible Lint
@@ -20,18 +24,43 @@ jobs:
 
       - name: Install Ansible and collections
         run: |
-          pip install ansible-core>=2.20 ansible-lint>=26.0
+          pip install 'ansible-core>=2.20' 'ansible-lint>=26.0'
           ansible-galaxy collection install -r requirements.yml
 
       - name: Run ansible-lint
         run: ansible-lint --force-color
 
-  molecule:
-    name: Molecule (${{ matrix.scenario }}/${{ matrix.distro }})
+  syntax-check:
+    name: Ansible Syntax Check
     runs-on: ubuntu-latest
     needs: ansible-lint
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - name: Install Ansible and collections
+        run: |
+          pip install 'ansible-core>=2.20'
+          ansible-galaxy collection install -r requirements.yml
+
+      - name: Run syntax check
+        run: ANSIBLE_LOCAL_TEMP=/tmp/ansible-local ANSIBLE_REMOTE_TEMP=/tmp/ansible-remote ansible-playbook -i inventory/hosts.ini site.yml --syntax-check
+
+  hetzner-e2e:
+    name: Hetzner E2E (${{ matrix.scenario }}/${{ matrix.distro }})
+    if: ${{ github.event.pull_request.head.repo.fork == false && secrets.HCLOUD_TOKEN != '' }}
+    runs-on: ubuntu-latest
+    needs:
+      - ansible-lint
+      - syntax-check
     strategy:
       fail-fast: false
+      max-parallel: 4
       matrix:
         distro:
           - debian13
@@ -42,6 +71,9 @@ jobs:
           - minimal
           - ssh-generate
           - full
+          - network
+          - expand-fs
+          - reboot
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -51,15 +83,53 @@ jobs:
         with:
           python-version: "3.14"
 
-      - name: Install dependencies
-        run: pip install molecule molecule-plugins[docker] ansible-core docker
+      - name: Install tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+          pip install 'ansible-core>=2.20'
 
       - name: Install Ansible collections
         run: ansible-galaxy collection install -r requirements.yml
 
-      - name: Run Molecule tests
-        run: molecule test -s ${{ matrix.scenario }}
+      - name: Setup hcloud CLI
+        uses: hetznercloud/setup-hcloud@v1
+
+      - name: Run Hetzner scenario
+        run: ./scripts/ci/run-hetzner-scenario.sh "${{ matrix.distro }}" "${{ matrix.scenario }}"
         env:
-          MOLECULE_DISTRO: ${{ matrix.distro }}
+          HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
+          HCLOUD_SERVER_TYPE: ${{ vars.HCLOUD_SERVER_TYPE }}
+          HCLOUD_LOCATION: ${{ vars.HCLOUD_LOCATION }}
           PY_COLORS: "1"
           ANSIBLE_FORCE_COLOR: "1"
+
+      - name: Upload CI artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hetzner-${{ matrix.scenario }}-${{ matrix.distro }}
+          path: .ci_artifacts/
+          if-no-files-found: ignore
+
+  hetzner-cleanup:
+    name: Hetzner Cleanup
+    if: ${{ always() && github.event.pull_request.head.repo.fork == false && secrets.HCLOUD_TOKEN != '' }}
+    runs-on: ubuntu-latest
+    needs: hetzner-e2e
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+
+      - name: Setup hcloud CLI
+        uses: hetznercloud/setup-hcloud@v1
+
+      - name: Cleanup run resources
+        run: ./scripts/ci/cleanup-hcloud-run.sh "${{ github.run_id }}"
+        env:
+          HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}

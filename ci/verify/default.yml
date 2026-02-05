@@ -1,0 +1,51 @@
+---
+- name: Verify CI Scenario - Default
+  hosts: targets
+  become: true
+  gather_facts: true
+  tasks:
+    - name: Verify user exists
+      ansible.builtin.user:
+        name: testadmin
+        state: present
+      check_mode: true
+      register: user_check
+      failed_when: user_check.changed
+
+    - name: Verify sudoers file exists
+      ansible.builtin.stat:
+        path: /etc/sudoers.d/testadmin
+      register: sudoers_file
+      failed_when: not sudoers_file.stat.exists
+
+    - name: Verify SSH password auth disabled
+      ansible.builtin.command:
+        cmd: grep -E '^PasswordAuthentication no' /etc/ssh/sshd_config
+      changed_when: false
+
+    - name: Verify SSH root login remains enabled for CI control connection
+      ansible.builtin.command:
+        cmd: grep -E '^PermitRootLogin yes' /etc/ssh/sshd_config
+      changed_when: false
+
+    - name: Verify hostname is configured
+      ansible.builtin.command:
+        cmd: hostnamectl --static
+      register: hostname_check
+      changed_when: false
+      failed_when: hostname_check.stdout | trim != "test-server"
+
+    - name: Verify firewalld service is running
+      ansible.builtin.systemd:
+        name: firewalld
+        state: started
+      check_mode: true
+      register: firewalld_check
+      failed_when: firewalld_check.changed
+
+    - name: Verify ssh service is allowed in firewall
+      ansible.builtin.command:
+        cmd: firewall-cmd --zone=public --list-services
+      register: firewall_services
+      changed_when: false
+      failed_when: "'ssh' not in firewall_services.stdout.split()"

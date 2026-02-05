@@ -117,7 +117,7 @@ ansible_user=admin
 | `bootstrap_hostname_enabled` | `true` | Set hostname |
 | `bootstrap_hostname` | `"{{ inventory_hostname }}"` | Hostname to set |
 | `bootstrap_expand_fs_enabled` | `false` | Expand root filesystem |
-| `bootstrap_reboot_enabled` | `false` | Reboot after configuration |
+| `bootstrap_reboot_enabled` | `true` | Reboot after configuration |
 
 ## Example Playbook
 
@@ -199,7 +199,9 @@ bootstrap_firewall_custom_zones:
 # Test specific platform
 ./scripts/test-all-platforms.sh --platform debian13
 
-# Available scenarios: default, minimal, ssh-generate, full
+# Local Molecule scenarios: default, minimal, ssh-generate, full
+
+# Hetzner CI scenarios: default, minimal, ssh-generate, full, network, expand-fs, reboot
 ```
 
 ## License

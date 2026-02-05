@@ -1,0 +1,78 @@
+---
+- name: Verify CI Scenario - Full
+  hosts: targets
+  become: true
+  gather_facts: true
+  vars:
+    ssh_key_dir: "{{ lookup('env', 'CI_PROJECT_DIR') }}/.ci_ssh_keys"
+  tasks:
+    - name: Get inventory hostname
+      ansible.builtin.set_fact:
+        test_hostname: "{{ inventory_hostname }}"
+
+    - name: Verify user exists
+      ansible.builtin.user:
+        name: fulladmin
+        state: present
+      check_mode: true
+      register: user_check
+      failed_when: user_check.changed
+
+    - name: Verify custom group exists
+      ansible.builtin.group:
+        name: operators
+        state: present
+      check_mode: true
+      register: group_check
+      failed_when: group_check.changed
+
+    - name: Verify user is in custom group
+      ansible.builtin.command:
+        cmd: groups fulladmin
+      register: groups_output
+      changed_when: false
+      failed_when: "'operators' not in groups_output.stdout"
+
+    - name: Verify generated private key exists
+      ansible.builtin.stat:
+        path: "{{ ssh_key_dir }}/{{ test_hostname }}_ed25519"
+      delegate_to: localhost
+      become: false
+      register: private_key
+      failed_when: not private_key.stat.exists
+
+    - name: Verify SSH port changed to 2222
+      ansible.builtin.command:
+        cmd: grep -E '^Port 2222' /etc/ssh/sshd_config
+      changed_when: false
+
+    - name: Verify firewalld is running
+      ansible.builtin.systemd:
+        name: firewalld
+        state: started
+      check_mode: true
+      register: firewalld_check
+      failed_when: firewalld_check.changed
+
+    - name: Verify firewall ports are allowed
+      ansible.builtin.command:
+        cmd: firewall-cmd --zone=public --list-ports
+      register: public_ports
+      changed_when: false
+      failed_when:
+        - "'8080/tcp' not in public_ports.stdout"
+        - "'8443/tcp' not in public_ports.stdout"
+
+    - name: Verify custom zone exists
+      ansible.builtin.command:
+        cmd: firewall-cmd --get-zones
+      register: zones_output
+      changed_when: false
+      failed_when: "'testzone' not in zones_output.stdout.split()"
+
+    - name: Verify custom zone port is allowed
+      ansible.builtin.command:
+        cmd: firewall-cmd --zone=testzone --list-ports
+      register: custom_zone_ports
+      changed_when: false
+      failed_when: "'9999/tcp' not in custom_zone_ports.stdout"

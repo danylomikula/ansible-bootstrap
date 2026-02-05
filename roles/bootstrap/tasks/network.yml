@@ -7,11 +7,47 @@
   changed_when: false
   failed_when: false
 
+- name: Stop unattended-upgrades to release dpkg lock
+  ansible.builtin.systemd:
+    name: unattended-upgrades
+    state: stopped
+  failed_when: false
+  when:
+    - _bootstrap_nmcli_check.rc != 0
+    - ansible_facts['os_family'] == 'Debian'
+
+- name: Wait for package manager processes to finish (Debian/Ubuntu)
+  ansible.builtin.shell: |
+    set -o pipefail
+    for _ in $(seq 1 120); do
+      if ! pgrep -x apt-get >/dev/null 2>&1 \
+        && ! pgrep -x dpkg >/dev/null 2>&1 \
+        && ! pgrep -f unattended-upgrade >/dev/null 2>&1; then
+        exit 0
+      fi
+      sleep 5
+    done
+    echo "Timed out waiting for apt/dpkg processes to finish." >&2
+    exit 1
+  args:
+    executable: /bin/bash
+  changed_when: false
+  when:
+    - _bootstrap_nmcli_check.rc != 0
+    - ansible_facts['os_family'] == 'Debian'
+
 - name: Install NetworkManager (Debian/Ubuntu)
   ansible.builtin.apt:
     name: network-manager
     state: present
     update_cache: true
+    lock_timeout: 900
+    update_cache_retries: 10
+    update_cache_retry_max_delay: 30
+  register: _bootstrap_install_nm_debian
+  until: _bootstrap_install_nm_debian is succeeded
+  retries: 3
+  delay: 20
   when:
     - _bootstrap_nmcli_check.rc != 0
     - ansible_facts['os_family'] == 'Debian'
@@ -30,32 +66,150 @@
     state: started
     enabled: true
 
-- name: Get default network connection name
+- name: Check for netplan
+  ansible.builtin.stat:
+    path: /etc/netplan
+  register: _bootstrap_netplan_dir
+
+- name: Configure netplan to use NetworkManager
+  ansible.builtin.copy:
+    dest: /etc/netplan/99-networkmanager.yaml
+    content: |
+      network:
+        version: 2
+        renderer: NetworkManager
+    mode: "0600"
+  when:
+    - _bootstrap_netplan_dir.stat.exists
+    - ansible_facts['os_family'] == 'Debian'
+  register: _bootstrap_netplan_config
+
+- name: Defer netplan apply to reboot
+  ansible.builtin.debug:
+    msg: "Netplan renderer change detected. Apply is deferred to reboot to avoid SSH disconnect."
+  when:
+    - _bootstrap_netplan_config.changed | default(false)
+    - bootstrap_reboot_enabled | default(false)
+
+- name: Apply netplan configuration immediately when reboot is disabled # noqa: no-handler
+  ansible.builtin.command: netplan apply
+  register: _bootstrap_netplan_apply_result
+  changed_when: _bootstrap_netplan_apply_result.rc == 0
+  when:
+    - _bootstrap_netplan_config.changed | default(false)
+    - not (bootstrap_reboot_enabled | default(false))
+
+- name: Wait for host to come back after netplan apply # noqa: no-handler
+  ansible.builtin.wait_for_connection:
+    delay: 10
+    timeout: 180
+  when:
+    - _bootstrap_netplan_config.changed | default(false)
+    - not (bootstrap_reboot_enabled | default(false))
+
+- name: Get default route interface
   ansible.builtin.shell: |
     set -o pipefail
-    nmcli -t -f NAME,DEVICE con show --active | grep -E ':(eth|en|wl)' | head -1 | cut -d: -f1
+    ip route show default | awk '{print $5}' | head -1
   args:
     executable: /bin/bash
+  register: _bootstrap_default_iface
+  changed_when: false
+  failed_when: false
+  when:
+    - bootstrap_network_connection | default('') | length == 0 or bootstrap_network_interface | default('') | length == 0
+
+- name: Get default network connection name from default interface
+  ansible.builtin.command:
+    cmd: nmcli -g GENERAL.CONNECTION device show "{{ _bootstrap_default_iface.stdout }}"
   register: _bootstrap_nmcli_connection
   changed_when: false
-  when: bootstrap_network_connection | default('') | length == 0
+  failed_when: false
+  when:
+    - bootstrap_network_connection | default('') | length == 0
+    - _bootstrap_default_iface.stdout | default('') | length > 0
+
+- name: Get first active network connection name (fallback)
+  ansible.builtin.command:
+    cmd: nmcli -t -f NAME con show --active
+  register: _bootstrap_nmcli_active_connections
+  changed_when: false
+  when:
+    - bootstrap_network_connection | default('') | length == 0
+    - (_bootstrap_nmcli_connection.stdout | default('') | trim) in ['', '--']
 
 - name: Set connection name fact
   ansible.builtin.set_fact:
-    _bootstrap_network_connection: "{{ bootstrap_network_connection if bootstrap_network_connection | default('') | length > 0 else _bootstrap_nmcli_connection.stdout }}"
+    _bootstrap_network_connection: >-
+      {{
+        bootstrap_network_connection
+        if bootstrap_network_connection | default('') | length > 0
+        else (
+          (_bootstrap_nmcli_connection.stdout | default('') | trim)
+          if (_bootstrap_nmcli_connection.stdout | default('') | trim) not in ['', '--']
+          else (_bootstrap_nmcli_active_connections.stdout_lines | default([]) | first | default(''))
+        )
+      }}
+
+- name: Set interface name fact
+  ansible.builtin.set_fact:
+    _bootstrap_network_ifname: >-
+      {{
+        bootstrap_network_interface
+        if bootstrap_network_interface | default('') | length > 0
+        else (
+          (_bootstrap_default_iface.stdout | default('') | trim)
+          if (_bootstrap_default_iface.stdout | default('') | trim) | length > 0
+          else (
+            ansible_facts['default_ipv4']['interface']
+            | default(ansible_default_ipv4.interface | default(''))
+          )
+        )
+      }}
+
+- name: Get interface name from selected NetworkManager connection
+  ansible.builtin.command:
+    cmd: nmcli -g connection.interface-name connection show "{{ _bootstrap_network_connection }}"
+  register: _bootstrap_nmcli_ifname
+  changed_when: false
+  failed_when: false
+  when:
+    - _bootstrap_network_ifname | default('') | length == 0
+    - _bootstrap_network_connection | default('') | length > 0
+
+- name: Finalize interface name fact
+  ansible.builtin.set_fact:
+    _bootstrap_network_ifname: >-
+      {{
+        (_bootstrap_nmcli_ifname.stdout | default('') | trim)
+        if (_bootstrap_nmcli_ifname.stdout | default('') | trim) not in ['', '--']
+        else (_bootstrap_network_ifname | default(''))
+      }}
+  when:
+    - _bootstrap_network_ifname | default('') | length == 0
+    - _bootstrap_nmcli_ifname is defined
+
+- name: Set fallback NetworkManager connection name
+  ansible.builtin.set_fact:
+    _bootstrap_network_connection: "bootstrap-{{ _bootstrap_network_ifname }}"
+  when:
+    - _bootstrap_network_connection | default('') | length == 0
+    - _bootstrap_network_ifname | default('') | length > 0
 
 # Fail fast if we cannot determine a connection name
 - name: Ensure network connection name is set
   ansible.builtin.fail:
-    msg: "Unable to determine NetworkManager connection name. Set bootstrap_network_connection explicitly."
+    msg: "Unable to determine NetworkManager connection name. Set bootstrap_network_connection (and bootstrap_network_interface if needed) explicitly."
   when: _bootstrap_network_connection | default('') | length == 0
 
 # Network changes applied on reboot - no need to restart connection mid-playbook
 - name: Configure static IPv4
   community.general.nmcli:
     conn_name: "{{ _bootstrap_network_connection }}"
+    ifname: "{{ _bootstrap_network_ifname | default(omit) }}"
     type: ethernet
-    ip4: "{{ bootstrap_static_ip }}"
+    ip4:
+      - "{{ bootstrap_static_ip }}"
     gw4: "{{ bootstrap_gateway }}"
     dns4: "{{ bootstrap_dns4 }}"
     dns4_ignore_auto: "{{ bootstrap_dns4_ignore_auto | default(true) }}"
@@ -68,8 +222,10 @@
 - name: Configure static IPv6 (manual mode)
   community.general.nmcli:
     conn_name: "{{ _bootstrap_network_connection }}"
+    ifname: "{{ _bootstrap_network_ifname | default(omit) }}"
     type: ethernet
-    ip6: "{{ bootstrap_static_ip6 }}"
+    ip6:
+      - "{{ bootstrap_static_ip6 }}"
     gw6: "{{ bootstrap_gateway6 }}"
     dns6: "{{ bootstrap_dns6 }}"
     dns6_ignore_auto: "{{ bootstrap_dns6_ignore_auto | default(true) }}"
@@ -84,6 +240,7 @@
 - name: Configure IPv6 with DHCPv6/SLAAC
   community.general.nmcli:
     conn_name: "{{ _bootstrap_network_connection }}"
+    ifname: "{{ _bootstrap_network_ifname | default(omit) }}"
     type: ethernet
     dns6: "{{ bootstrap_dns6 }}"
     dns6_ignore_auto: "{{ bootstrap_dns6_ignore_auto | default(true) }}"
@@ -92,19 +249,28 @@
   when:
     - bootstrap_ipv6_dhcpv6 | default(false)
 
-- name: Add static IPv6 address alongside SLAAC
+- name: Read current IPv6 addresses from connection
   ansible.builtin.command:
-    cmd: nmcli con mod "{{ _bootstrap_network_connection }}" +ipv6.addresses "{{ bootstrap_static_ip6 }}"
-  register: _bootstrap_add_static_ipv6
-  changed_when: _bootstrap_add_static_ipv6.rc == 0
-  failed_when: false
+    cmd: nmcli -g ipv6.addresses connection show "{{ _bootstrap_network_connection }}"
+  register: _bootstrap_ipv6_addresses
+  changed_when: false
   when:
     - bootstrap_ipv6_dhcpv6 | default(false)
     - bootstrap_static_ip6 | default('') | length > 0
 
+- name: Add static IPv6 address alongside SLAAC
+  ansible.builtin.command:
+    cmd: nmcli con mod "{{ _bootstrap_network_connection }}" +ipv6.addresses "{{ bootstrap_static_ip6 }}"
+  changed_when: true
+  when:
+    - bootstrap_ipv6_dhcpv6 | default(false)
+    - bootstrap_static_ip6 | default('') | length > 0
+    - bootstrap_static_ip6 not in (_bootstrap_ipv6_addresses.stdout | default(''))
+
 - name: Disable IPv6 if not configured
   community.general.nmcli:
     conn_name: "{{ _bootstrap_network_connection }}"
+    ifname: "{{ _bootstrap_network_ifname | default(omit) }}"
     type: ethernet
     method6: disabled
     state: present

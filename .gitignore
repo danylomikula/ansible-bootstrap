@@ -14,11 +14,16 @@ molecule/.ssh_keys/
 .molecule/
 .cache/
 
+# CI
+.ci_artifacts/
+.ci_ssh_keys/
+
 # Python
 __pycache__/
 *.py[cod]
 .venv/
 venv/
+.python-version
 
 # IDE
 .idea/

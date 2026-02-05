@@ -13,9 +13,28 @@
     msg: "Firewall configuration skipped in container"
   when: _bootstrap_dockerenv.stat.exists
 
-- name: Install firewalld (Debian/Ubuntu)
+- name: Disable ufw in favour of firewalld (Debian/Ubuntu)
+  community.general.ufw:
+    state: disabled
+  when:
+    - not _bootstrap_dockerenv.stat.exists
+    - ansible_facts['os_family'] == 'Debian'
+  failed_when: false
+
+- name: Stop unattended-upgrades to release dpkg lock
+  ansible.builtin.systemd:
+    name: unattended-upgrades
+    state: stopped
+  when:
+    - not _bootstrap_dockerenv.stat.exists
+    - ansible_facts['os_family'] == 'Debian'
+  failed_when: false
+
+- name: Install firewalld and Python bindings (Debian/Ubuntu)
   ansible.builtin.apt:
-    name: firewalld
+    name:
+      - firewalld
+      - python3-firewall
     state: present
     update_cache: true
   when:
@@ -83,12 +102,11 @@
     - not _bootstrap_dockerenv.stat.exists
     - (bootstrap_firewall_custom_zones | default([])) | length > 0
 
-- name: Configure firewall zone
+- name: Ensure target firewall zone exists
   ansible.posix.firewalld:
     zone: "{{ bootstrap_firewall_zone }}"
-    state: enabled
+    state: present
     permanent: true
-    immediate: true
   when: not _bootstrap_dockerenv.stat.exists
 
 - name: Allow specified services

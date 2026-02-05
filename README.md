@@ -74,13 +74,10 @@ ansible-playbook -i inventory.ini bootstrap.yml -k -K
 ### Using from Source
 
 ```bash
-# Copy and edit inventory
-cp inventory.ini.example inventory.ini
-
-# Edit group_vars/all/vars.yml with your settings
+# Edit inventory/hosts.ini and group_vars/all.yml with your settings
 
 # Run playbook (see First Run section below)
-ansible-playbook -i inventory.ini site.yml
+ansible-playbook -i inventory/hosts.ini site.yml
 ```
 
 ## First Run
@@ -132,16 +129,11 @@ ansible_user=ansible
 ansible-bootstrap/
 ├── site.yml                 # Main playbook
 ├── requirements.yml         # Ansible Galaxy dependencies
-├── inventory.ini.example    # Example inventory
+├── inventory/hosts.ini      # Inventory
 ├── group_vars/
-│   └── all/
-│       └── vars.yml         # Default variables
+│   └── all.yml              # Environment variables
 └── roles/
-    └── bootstrap/           # Main role
-        ├── defaults/        # Default variables
-        ├── tasks/           # Task files
-        ├── handlers/        # Handlers
-        └── meta/            # Galaxy metadata
+    └── bootstrap/           # Main bootstrap role
 ```
 
 ## Configuration
@@ -151,18 +143,14 @@ See [roles/bootstrap/README.md](roles/bootstrap/README.md) for detailed configur
 ## Testing
 
 ```bash
-# Run all tests on all platforms
+# Local Docker-based Molecule test matrix
 ./scripts/test-all-platforms.sh
 
-# Test specific scenario
-./scripts/test-all-platforms.sh --scenario full
+# Ephemeral Hetzner VM test for one scenario
+HCLOUD_TOKEN=<token> ./scripts/ci/run-hetzner-scenario.sh ubuntu2404 full
 
-# Test specific platform
-./scripts/test-all-platforms.sh --platform debian13
-
-# List available scenarios and platforms
-./scripts/test-all-platforms.sh --list-scenarios
-./scripts/test-all-platforms.sh --list-platforms
+# Cleanup leaked Hetzner resources from one workflow run
+HCLOUD_TOKEN=<token> ./scripts/ci/cleanup-hcloud-run.sh <github_run_id>
 ```
 
 ## License

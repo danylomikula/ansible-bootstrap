@@ -2,6 +2,42 @@
 
 Utility scripts for testing the bootstrap role.
 
+## Hetzner CI (Ephemeral VMs)
+
+Production CI uses ephemeral Hetzner servers provisioned per job and deleted after tests.
+
+### scripts/ci/run-hetzner-scenario.sh
+
+Run a full converge + verify cycle on a temporary Hetzner VM.
+
+```bash
+HCLOUD_TOKEN=<token> ./scripts/ci/run-hetzner-scenario.sh ubuntu2404 full
+```
+
+Arguments:
+
+1. `distro` (`debian13`, `ubuntu2404`, `rockylinux10`)
+2. `scenario` (`default`, `minimal`, `ssh-generate`, `full`, `network`, `expand-fs`, `reboot`)
+
+Environment variables:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `HCLOUD_TOKEN` | required | Hetzner Cloud API token |
+| `HCLOUD_SERVER_TYPE` | `cx23` | Hetzner server type for CI instance |
+| `HCLOUD_LOCATION` | `fsn1` | Hetzner location |
+| `GITHUB_WORKSPACE` | current dir | Project directory on runner |
+
+### scripts/ci/cleanup-hcloud-run.sh
+
+Emergency cleanup for resources created by one workflow run.
+
+```bash
+HCLOUD_TOKEN=<token> ./scripts/ci/cleanup-hcloud-run.sh <github_run_id>
+```
+
+This script removes servers and SSH keys matching the `ci-<run_id>-*` naming convention.
+
 ## test-all-platforms.sh
 
 Run molecule tests across all supported platforms and scenarios.
