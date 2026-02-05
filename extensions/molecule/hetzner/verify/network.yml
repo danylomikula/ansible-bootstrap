@@ -4,55 +4,26 @@
   become: true
   gather_facts: true
   tasks:
-    - name: Verify NetworkManager is running
-      ansible.builtin.systemd:
-        name: NetworkManager
-        state: started
-      check_mode: true
-      register: nm_service
-      failed_when: nm_service.changed
-
-    - name: Verify active NetworkManager connection exists
-      ansible.builtin.command:
-        cmd: nmcli -t -f NAME,DEVICE con show --active
-      register: nm_active_connections
-      changed_when: false
-      failed_when: (nm_active_connections.stdout_lines | default([]) | length) == 0
-
-    - name: Check NetworkManager netplan renderer file
+    - name: Ensure no bootstrap NetworkManager netplan renderer file is created
       ansible.builtin.stat:
         path: /etc/netplan/99-networkmanager.yaml
-      register: netplan_nm_renderer_file
+      register: bootstrap_nm_renderer
+      failed_when: bootstrap_nm_renderer.stat.exists
+      when: ansible_facts['os_family'] == 'Debian'
 
-    - name: Verify netplan renderer is set to NetworkManager on Ubuntu
-      ansible.builtin.command:
-        cmd: grep -E '^[[:space:]]*renderer:[[:space:]]*NetworkManager([[:space:]]*|$)' /etc/netplan/99-networkmanager.yaml
-      changed_when: false
-      when:
-        - ansible_facts['distribution'] == 'Ubuntu'
-        - netplan_nm_renderer_file.stat.exists
-
-    - name: Check Debian NetworkManager managed config snippet
+    - name: Ensure no bootstrap NetworkManager managed snippet is created
       ansible.builtin.stat:
         path: /etc/NetworkManager/conf.d/10-bootstrap-managed.conf
-      register: debian_nm_managed_snippet
+      register: bootstrap_nm_managed
+      failed_when: bootstrap_nm_managed.stat.exists
       when: ansible_facts['distribution'] == 'Debian'
 
-    - name: Verify Debian NetworkManager managed=true in snippet
+    - name: Verify active interface can be detected via default route
       ansible.builtin.command:
-        cmd: grep -E '^[[:space:]]*managed[[:space:]]*=[[:space:]]*true([[:space:]]*|$)' /etc/NetworkManager/conf.d/10-bootstrap-managed.conf
+        cmd: ip route show default
+      register: default_route
       changed_when: false
-      when:
-        - ansible_facts['distribution'] == 'Debian'
-        - debian_nm_managed_snippet.stat.exists
-
-    - name: Verify Debian NetworkManager managed=true in main config fallback
-      ansible.builtin.command:
-        cmd: grep -E '^[[:space:]]*managed[[:space:]]*=[[:space:]]*true([[:space:]]*|$)' /etc/NetworkManager/NetworkManager.conf
-      changed_when: false
-      when:
-        - ansible_facts['distribution'] == 'Debian'
-        - not (debian_nm_managed_snippet.stat.exists | default(false))
+      failed_when: default_route.stdout | trim | length == 0
 
     - name: Verify firewalld service is running
       ansible.builtin.systemd:

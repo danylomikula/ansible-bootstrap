@@ -1,6 +1,4 @@
 ---
-# User creation tasks
-
 - name: Determine user group
   ansible.builtin.set_fact:
     _bootstrap_user_group: "{{ bootstrap_user_group if bootstrap_user_group | default('') | length > 0 else _bootstrap_sudo_group }}"
@@ -25,7 +23,6 @@
     password: "{{ bootstrap_user_password | default(omit) if bootstrap_user_password | default('') | length > 0 else omit }}"
     state: present
 
-# SSH key generation (local)
 - name: Ensure local SSH keys directory exists
   ansible.builtin.file:
     path: "{{ bootstrap_ssh_key_local_dir }}"
@@ -33,7 +30,7 @@
     mode: "0700"
   delegate_to: localhost
   become: false
-  check_mode: false  # always create directory, even in check mode
+  check_mode: false
   when:
     - bootstrap_ssh_key_generate | default(false)
     - bootstrap_ssh_pubkey | default('') | length == 0
@@ -46,7 +43,7 @@
     state: present
   delegate_to: localhost
   become: false
-  check_mode: false  # always generate keys, even in check mode
+  check_mode: false
   when:
     - bootstrap_ssh_key_generate | default(false)
     - bootstrap_ssh_pubkey | default('') | length == 0
@@ -63,7 +60,6 @@
     _bootstrap_ssh_pubkey: "{{ bootstrap_ssh_pubkey }}"
   when: bootstrap_ssh_pubkey | default('') | length > 0
 
-# Deploy public key
 - name: Deploy SSH public key
   ansible.posix.authorized_key:
     user: "{{ bootstrap_user }}"

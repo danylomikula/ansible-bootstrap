@@ -1,120 +1,16 @@
 ---
-# Network configuration tasks (static IP via NetworkManager)
-
-- name: Check if NetworkManager is available
-  ansible.builtin.command: nmcli -v
-  register: _bootstrap_nmcli_check
-  changed_when: false
-  failed_when: false
-
-- name: Stop unattended-upgrades to release dpkg lock
-  ansible.builtin.systemd:
-    name: unattended-upgrades
-    state: stopped
-  failed_when: false
-  when:
-    - _bootstrap_nmcli_check.rc != 0
-    - ansible_facts['os_family'] == 'Debian'
-
-- name: Wait for SSH after stopping unattended-upgrades
-  ansible.builtin.wait_for_connection:
-    delay: 2
-    timeout: 120
-  when:
-    - _bootstrap_nmcli_check.rc != 0
-    - ansible_facts['os_family'] == 'Debian'
-
-- name: Install NetworkManager (Debian/Ubuntu)
-  ansible.builtin.apt:
-    name: network-manager
-    state: present
-    update_cache: true
-    lock_timeout: 900
-    update_cache_retries: 10
-    update_cache_retry_max_delay: 30
-  register: _bootstrap_install_nm_debian
-  until: _bootstrap_install_nm_debian is succeeded
-  retries: 3
-  delay: 20
-  when:
-    - _bootstrap_nmcli_check.rc != 0
-    - ansible_facts['os_family'] == 'Debian'
-
-- name: Install NetworkManager (RedHat)
-  ansible.builtin.dnf:
-    name: NetworkManager
-    state: present
-  when:
-    - _bootstrap_nmcli_check.rc != 0
-    - ansible_facts['os_family'] == 'RedHat'
-
-- name: Ensure NetworkManager is running
-  ansible.builtin.systemd:
-    name: NetworkManager
-    state: started
-    enabled: true
-
-- name: Ensure NetworkManager manages ifupdown interfaces (Debian)
-  ansible.builtin.copy:
-    dest: /etc/NetworkManager/conf.d/10-bootstrap-managed.conf
-    content: |
-      [ifupdown]
-      managed=true
-    mode: "0644"
-  register: _bootstrap_nm_debian_managed_conf
-  when: ansible_facts['distribution'] == 'Debian'
-
-- name: Restart NetworkManager after Debian managed config change
-  ansible.builtin.systemd:
-    name: NetworkManager
-    state: restarted
-  when:
-    - ansible_facts['distribution'] == 'Debian'
-    - _bootstrap_nm_debian_managed_conf.changed | default(false)
-
-- name: Check for netplan
-  ansible.builtin.stat:
-    path: /etc/netplan
-  register: _bootstrap_netplan_dir
-
-- name: Configure netplan to use NetworkManager
-  ansible.builtin.copy:
-    dest: /etc/netplan/99-networkmanager.yaml
-    content: |
-      network:
-        version: 2
-        renderer: NetworkManager
-    mode: "0600"
-  when:
-    - _bootstrap_netplan_dir.stat.exists
-    - ansible_facts['os_family'] == 'Debian'
-  register: _bootstrap_netplan_config
-
-- name: Defer netplan apply to reboot
-  ansible.builtin.debug:
-    msg: "Netplan renderer change detected. Apply is deferred to reboot to avoid SSH disconnect."
-  when:
-    - _bootstrap_netplan_config.changed | default(false)
-    - bootstrap_reboot_enabled | default(false)
-
-- name: Apply netplan configuration immediately when reboot is disabled # noqa: no-handler
-  ansible.builtin.command: netplan apply
-  register: _bootstrap_netplan_apply_result
-  changed_when: _bootstrap_netplan_apply_result.rc == 0
-  when:
-    - _bootstrap_netplan_config.changed | default(false)
-    - not (bootstrap_reboot_enabled | default(false))
-
-- name: Wait for host to come back after netplan apply # noqa: no-handler
-  ansible.builtin.wait_for_connection:
-    delay: 10
-    timeout: 180
-  when:
-    - _bootstrap_netplan_config.changed | default(false)
-    - not (bootstrap_reboot_enabled | default(false))
-
-- name: Determine if NetworkManager connection profile changes are required
+- name: Determine if network profile changes are required
   ansible.builtin.set_fact:
+    _bootstrap_network_ipv4_static_configured: >-
+      {{
+        (bootstrap_static_ip | default('') | length > 0)
+        and (bootstrap_gateway | default('') | length > 0)
+      }}
+    _bootstrap_network_ipv6_static_configured: >-
+      {{
+        (bootstrap_static_ip6 | default('') | length > 0)
+        and (bootstrap_gateway6 | default('') | length > 0)
+      }}
     _bootstrap_network_profile_changes_required: >-
       {{
         (
@@ -141,8 +37,7 @@
   register: _bootstrap_ssh_iface
   changed_when: false
   failed_when: false
-  when:
-    - _bootstrap_network_profile_changes_required | bool
+  when: _bootstrap_network_profile_changes_required | bool
 
 - name: Get default route interface
   ansible.builtin.shell: |
@@ -153,65 +48,22 @@
   register: _bootstrap_default_iface
   changed_when: false
   failed_when: false
-  when:
-    - _bootstrap_network_profile_changes_required | bool
-
-- name: Determine preferred active interface
-  ansible.builtin.set_fact:
-    _bootstrap_preferred_iface: >-
-      {{
-        (_bootstrap_ssh_iface.stdout | default('') | trim)
-        if (_bootstrap_ssh_iface.stdout | default('') | trim) | length > 0
-        else (_bootstrap_default_iface.stdout | default('') | trim)
-      }}
-  when:
-    - _bootstrap_network_profile_changes_required | bool
-
-- name: Get default network connection name from preferred interface
-  ansible.builtin.command:
-    cmd: nmcli -g GENERAL.CONNECTION device show "{{ _bootstrap_preferred_iface }}"
-  register: _bootstrap_nmcli_connection
-  changed_when: false
-  failed_when: false
-  when:
-    - _bootstrap_network_profile_changes_required | bool
-    - bootstrap_network_connection | default('') | length == 0
-    - _bootstrap_preferred_iface | default('') | length > 0
-
-- name: Get first active network connection name (fallback)
-  ansible.builtin.command:
-    cmd: nmcli -t -f NAME con show --active
-  register: _bootstrap_nmcli_active_connections
-  changed_when: false
-  when:
-    - _bootstrap_network_profile_changes_required | bool
-    - bootstrap_network_connection | default('') | length == 0
-    - (_bootstrap_nmcli_connection.stdout | default('') | trim) in ['', '--']
-
-- name: Set connection name fact
-  ansible.builtin.set_fact:
-    _bootstrap_network_connection: >-
-      {{
-        bootstrap_network_connection
-        if bootstrap_network_connection | default('') | length > 0
-        else (
-          (_bootstrap_nmcli_connection.stdout | default('') | trim)
-          if (_bootstrap_nmcli_connection.stdout | default('') | trim) not in ['', '--']
-          else (_bootstrap_nmcli_active_connections.stdout_lines | default([]) | first | default(''))
-        )
-      }}
   when: _bootstrap_network_profile_changes_required | bool
 
-- name: Set interface name fact
+- name: Determine preferred network interface
   ansible.builtin.set_fact:
     _bootstrap_network_ifname: >-
       {{
         bootstrap_network_interface
         if bootstrap_network_interface | default('') | length > 0
         else (
-          (_bootstrap_preferred_iface | default('') | trim)
-          if (_bootstrap_preferred_iface | default('') | trim) | length > 0
-          else (ansible_facts.get('default_ipv4', {}).get('interface', ''))
+          (_bootstrap_ssh_iface.stdout | default('') | trim)
+          if (_bootstrap_ssh_iface.stdout | default('') | trim) | length > 0
+          else (
+            (_bootstrap_default_iface.stdout | default('') | trim)
+            if (_bootstrap_default_iface.stdout | default('') | trim) | length > 0
+            else (ansible_facts.get('default_ipv4', {}).get('interface', ''))
+          )
         )
       }}
   when: _bootstrap_network_profile_changes_required | bool
@@ -226,131 +78,207 @@
     - _bootstrap_network_profile_changes_required | bool
     - _bootstrap_network_ifname | default('') | length > 0
 
-- name: Correct invalid or loopback interface using default route
-  ansible.builtin.set_fact:
-    _bootstrap_network_ifname: "{{ _bootstrap_preferred_iface | default('') | trim }}"
-  when:
-    - _bootstrap_network_profile_changes_required | bool
-    - (_bootstrap_ifname_check.rc | default(1)) != 0 or _bootstrap_network_ifname == 'lo'
-    - (_bootstrap_preferred_iface | default('') | trim) | length > 0
-
-- name: Get interface name from selected NetworkManager connection
-  ansible.builtin.command:
-    cmd: nmcli -g connection.interface-name connection show "{{ _bootstrap_network_connection }}"
-  register: _bootstrap_nmcli_ifname
-  changed_when: false
-  failed_when: false
-  when:
-    - _bootstrap_network_profile_changes_required | bool
-    - _bootstrap_network_ifname | default('') | length == 0
-    - _bootstrap_network_connection | default('') | length > 0
-
-- name: Finalize interface name fact
-  ansible.builtin.set_fact:
-    _bootstrap_network_ifname: >-
-      {{
-        (_bootstrap_nmcli_ifname.stdout | default('') | trim)
-        if (_bootstrap_nmcli_ifname.stdout | default('') | trim) not in ['', '--']
-        else (_bootstrap_network_ifname | default(''))
-      }}
-  when:
-    - _bootstrap_network_profile_changes_required | bool
-    - _bootstrap_network_ifname | default('') | length == 0
-    - _bootstrap_nmcli_ifname is defined
-
-- name: Set fallback NetworkManager connection name
-  ansible.builtin.command:
-    cmd: nmcli -t -f NAME,DEVICE con show --active
-  register: _bootstrap_nmcli_active_connections_late
-  changed_when: false
-  when:
-    - _bootstrap_network_profile_changes_required | bool
-    - _bootstrap_network_connection | default('') | length == 0
-    - _bootstrap_network_ifname | default('') | length > 0
-
-- name: Set connection name from active profile bound to selected interface
-  ansible.builtin.set_fact:
-    _bootstrap_network_connection: >-
-      {{
-        (
-          (_bootstrap_nmcli_active_connections_late.stdout_lines | default([]))
-          | select('search', ':' ~ _bootstrap_network_ifname ~ '$')
-          | map('regex_replace', '^(.*):[^:]+$', '\\1')
-          | list
-          | first
-        )
-        | default(
-            (
-              (_bootstrap_nmcli_active_connections_late.stdout_lines | default([]))
-              | reject('search', ':lo$')
-              | map('regex_replace', '^(.*):[^:]+$', '\\1')
-              | list
-              | first
-            ),
-            true
-          )
-        | default('')
-      }}
-  when:
-    - _bootstrap_network_profile_changes_required | bool
-    - _bootstrap_network_connection | default('') | length == 0
-    - _bootstrap_nmcli_active_connections_late is defined
-
-- name: Ensure network interface name is set
+- name: Ensure network interface name is valid
   ansible.builtin.fail:
     msg: "Unable to determine a valid network interface. Set bootstrap_network_interface explicitly."
   when:
     - _bootstrap_network_profile_changes_required | bool
-    - _bootstrap_network_ifname | default('') | length == 0 or _bootstrap_network_ifname == 'lo'
+    - _bootstrap_network_ifname | default('') | length == 0 or _bootstrap_network_ifname == 'lo' or (_bootstrap_ifname_check.rc | default(1)) != 0
 
-- name: Ensure selected network interface exists
-  ansible.builtin.command:
-    cmd: ip -o link show "{{ _bootstrap_network_ifname }}"
-  changed_when: false
-  when: _bootstrap_network_profile_changes_required | bool
-
-# Fail fast if we cannot determine a connection name
-- name: Ensure network connection name is set
-  ansible.builtin.fail:
-    msg: "Unable to determine NetworkManager connection name. Set bootstrap_network_connection (and bootstrap_network_interface if needed) explicitly."
+- name: Check for netplan directory (Debian/Ubuntu)
+  ansible.builtin.stat:
+    path: /etc/netplan
+  register: _bootstrap_netplan_dir
   when:
     - _bootstrap_network_profile_changes_required | bool
+    - ansible_facts['os_family'] == 'Debian'
+
+- name: Set native backend for Debian/Ubuntu
+  ansible.builtin.set_fact:
+    _bootstrap_network_backend: "{{ 'netplan' if (_bootstrap_netplan_dir.stat.exists | default(false)) else 'interfaces' }}"
+  when:
+    - _bootstrap_network_profile_changes_required | bool
+    - ansible_facts['os_family'] == 'Debian'
+
+- name: Render static network netplan config (Debian/Ubuntu)
+  ansible.builtin.template:
+    src: netplan-static.yaml.j2
+    dest: /etc/netplan/99-bootstrap-static.yaml
+    owner: root
+    group: root
+    mode: '0600'
+  register: _bootstrap_netplan_config
+  when:
+    - _bootstrap_network_profile_changes_required | bool
+    - ansible_facts['os_family'] == 'Debian'
+    - _bootstrap_network_backend == 'netplan'
+
+- name: Validate netplan configuration
+  ansible.builtin.command: netplan generate
+  changed_when: false
+  when:
+    - _bootstrap_network_profile_changes_required | bool
+    - ansible_facts['os_family'] == 'Debian'
+    - _bootstrap_network_backend == 'netplan'
+    - _bootstrap_netplan_config.changed | default(false)
+
+- name: Ensure interfaces.d directory exists (Debian/Ubuntu fallback)
+  ansible.builtin.file:
+    path: /etc/network/interfaces.d
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  when:
+    - _bootstrap_network_profile_changes_required | bool
+    - ansible_facts['os_family'] == 'Debian'
+    - _bootstrap_network_backend == 'interfaces'
+
+- name: Verify ifupdown tools are available (Debian/Ubuntu fallback)
+  ansible.builtin.command:
+    cmd: ifup --version
+  register: _bootstrap_ifup_check
+  changed_when: false
+  failed_when: false
+  when:
+    - _bootstrap_network_profile_changes_required | bool
+    - ansible_facts['os_family'] == 'Debian'
+    - _bootstrap_network_backend == 'interfaces'
+
+- name: Fail when ifupdown is missing (Debian/Ubuntu fallback)
+  ansible.builtin.fail:
+    msg: "ifupdown is required for interfaces backend. Install ifupdown or enable netplan."
+  when:
+    - _bootstrap_network_profile_changes_required | bool
+    - ansible_facts['os_family'] == 'Debian'
+    - _bootstrap_network_backend == 'interfaces'
+    - (_bootstrap_ifup_check.rc | default(1)) != 0
+
+- name: Render static interfaces config (Debian/Ubuntu fallback)
+  ansible.builtin.template:
+    src: interfaces-static.cfg.j2
+    dest: /etc/network/interfaces.d/99-bootstrap-static.cfg
+    owner: root
+    group: root
+    mode: '0644'
+  register: _bootstrap_interfaces_config
+  when:
+    - _bootstrap_network_profile_changes_required | bool
+    - ansible_facts['os_family'] == 'Debian'
+    - _bootstrap_network_backend == 'interfaces'
+
+- name: Ensure interfaces.d snippets are sourced (Debian/Ubuntu fallback)
+  ansible.builtin.lineinfile:
+    path: /etc/network/interfaces
+    regexp: '^source /etc/network/interfaces.d/\*\.cfg$'
+    line: 'source /etc/network/interfaces.d/*.cfg'
+    create: true
+    insertafter: EOF
+    owner: root
+    group: root
+    mode: '0644'
+  register: _bootstrap_interfaces_source
+  when:
+    - _bootstrap_network_profile_changes_required | bool
+    - ansible_facts['os_family'] == 'Debian'
+    - _bootstrap_network_backend == 'interfaces'
+
+- name: Check if NetworkManager CLI is available (RedHat)
+  ansible.builtin.command: nmcli -v
+  register: _bootstrap_nmcli_check
+  changed_when: false
+  failed_when: false
+  when:
+    - _bootstrap_network_profile_changes_required | bool
+    - ansible_facts['os_family'] == 'RedHat'
+
+- name: Install NetworkManager when missing (RedHat)
+  ansible.builtin.dnf:
+    name: NetworkManager
+    state: present
+  when:
+    - _bootstrap_network_profile_changes_required | bool
+    - ansible_facts['os_family'] == 'RedHat'
+    - _bootstrap_nmcli_check.rc != 0
+
+- name: Ensure NetworkManager is running (RedHat)
+  ansible.builtin.systemd:
+    name: NetworkManager
+    state: started
+    enabled: true
+  when:
+    - _bootstrap_network_profile_changes_required | bool
+    - ansible_facts['os_family'] == 'RedHat'
+
+- name: Get active connection name from selected interface (RedHat)
+  ansible.builtin.command:
+    cmd: nmcli -g GENERAL.CONNECTION device show "{{ _bootstrap_network_ifname }}"
+  register: _bootstrap_nmcli_connection
+  changed_when: false
+  failed_when: false
+  when:
+    - _bootstrap_network_profile_changes_required | bool
+    - ansible_facts['os_family'] == 'RedHat'
+    - bootstrap_network_connection | default('') | length == 0
+
+- name: Get first active connection name (RedHat fallback)
+  ansible.builtin.command:
+    cmd: nmcli -t -f NAME con show --active
+  register: _bootstrap_nmcli_active_connections
+  changed_when: false
+  when:
+    - _bootstrap_network_profile_changes_required | bool
+    - ansible_facts['os_family'] == 'RedHat'
+    - bootstrap_network_connection | default('') | length == 0
+    - (_bootstrap_nmcli_connection.stdout | default('') | trim) in ['', '--']
+
+- name: Set NetworkManager connection name (RedHat)
+  ansible.builtin.set_fact:
+    _bootstrap_network_connection: >-
+      {{
+        bootstrap_network_connection
+        if bootstrap_network_connection | default('') | length > 0
+        else (
+          (_bootstrap_nmcli_connection.stdout | default('') | trim)
+          if (_bootstrap_nmcli_connection.stdout | default('') | trim) not in ['', '--']
+          else (_bootstrap_nmcli_active_connections.stdout_lines | default([]) | first | default(''))
+        )
+      }}
+  when:
+    - _bootstrap_network_profile_changes_required | bool
+    - ansible_facts['os_family'] == 'RedHat'
+
+- name: Ensure NetworkManager connection name is set (RedHat)
+  ansible.builtin.fail:
+    msg: "Unable to determine NetworkManager connection name. Set bootstrap_network_connection explicitly."
+  when:
+    - _bootstrap_network_profile_changes_required | bool
+    - ansible_facts['os_family'] == 'RedHat'
     - _bootstrap_network_connection | default('') | length == 0
 
-- name: Set expected network link type from selected interface
-  ansible.builtin.set_fact:
-    _bootstrap_network_link_type: >-
-      {{
-        'wifi'
-        if (_bootstrap_network_ifname | default('') | lower) is match('^wl')
-        else 'ethernet'
-      }}
-  when: _bootstrap_network_profile_changes_required | bool
-
-- name: Get selected NetworkManager connection type
+- name: Get selected NetworkManager connection type (RedHat)
   ansible.builtin.command:
     cmd: nmcli -g connection.type connection show "{{ _bootstrap_network_connection }}"
   register: _bootstrap_nmcli_connection_type
   changed_when: false
   failed_when: false
-  when: _bootstrap_network_profile_changes_required | bool
+  when:
+    - _bootstrap_network_profile_changes_required | bool
+    - ansible_facts['os_family'] == 'RedHat'
 
-- name: Set network profile type for nmcli module
+- name: Set profile type for nmcli module (RedHat)
   ansible.builtin.set_fact:
     _bootstrap_network_profile_type: >-
       {{
         'wifi'
         if (_bootstrap_nmcli_connection_type.stdout | default('') | trim) in ['wifi', '802-11-wireless']
-        else (
-          'ethernet'
-          if (_bootstrap_nmcli_connection_type.stdout | default('') | trim) in ['ethernet', '802-3-ethernet']
-          else _bootstrap_network_link_type
-        )
+        else 'ethernet'
       }}
-  when: _bootstrap_network_profile_changes_required | bool
+  when:
+    - _bootstrap_network_profile_changes_required | bool
+    - ansible_facts['os_family'] == 'RedHat'
 
-# Network changes applied on reboot - no need to restart connection mid-playbook
-- name: Configure static IPv4
+- name: Configure static IPv4 (RedHat)
   community.general.nmcli:
     conn_name: "{{ _bootstrap_network_connection }}"
     ifname: "{{ _bootstrap_network_ifname }}"
@@ -363,10 +291,11 @@
     method4: manual
     state: present
   when:
-    - bootstrap_static_ip | default('') | length > 0
-    - bootstrap_gateway | default('') | length > 0
+    - _bootstrap_network_profile_changes_required | bool
+    - ansible_facts['os_family'] == 'RedHat'
+    - _bootstrap_network_ipv4_static_configured | bool
 
-- name: Configure static IPv6 (manual mode)
+- name: Configure static IPv6 (RedHat)
   community.general.nmcli:
     conn_name: "{{ _bootstrap_network_connection }}"
     ifname: "{{ _bootstrap_network_ifname }}"
@@ -379,12 +308,12 @@
     method6: manual
     state: present
   when:
-    - bootstrap_static_ip6 | default('') | length > 0
-    - bootstrap_gateway6 | default('') | length > 0
+    - _bootstrap_network_profile_changes_required | bool
+    - ansible_facts['os_family'] == 'RedHat'
+    - _bootstrap_network_ipv6_static_configured | bool
     - not (bootstrap_ipv6_dhcpv6 | default(false))
 
-# Auto mode with additional static address (for DHCPv6/SLAAC + ULA)
-- name: Configure IPv6 with DHCPv6/SLAAC
+- name: Configure IPv6 with DHCPv6/SLAAC (RedHat)
   community.general.nmcli:
     conn_name: "{{ _bootstrap_network_connection }}"
     ifname: "{{ _bootstrap_network_ifname }}"
@@ -394,27 +323,11 @@
     method6: "{{ bootstrap_ipv6_method | default('auto') }}"
     state: present
   when:
+    - _bootstrap_network_profile_changes_required | bool
+    - ansible_facts['os_family'] == 'RedHat'
     - bootstrap_ipv6_dhcpv6 | default(false)
 
-- name: Read current IPv6 addresses from connection
-  ansible.builtin.command:
-    cmd: nmcli -g ipv6.addresses connection show "{{ _bootstrap_network_connection }}"
-  register: _bootstrap_ipv6_addresses
-  changed_when: false
-  when:
-    - bootstrap_ipv6_dhcpv6 | default(false)
-    - bootstrap_static_ip6 | default('') | length > 0
-
-- name: Add static IPv6 address alongside SLAAC
-  ansible.builtin.command:
-    cmd: nmcli con mod "{{ _bootstrap_network_connection }}" +ipv6.addresses "{{ bootstrap_static_ip6 }}"
-  changed_when: true
-  when:
-    - bootstrap_ipv6_dhcpv6 | default(false)
-    - bootstrap_static_ip6 | default('') | length > 0
-    - bootstrap_static_ip6 not in (_bootstrap_ipv6_addresses.stdout | default(''))
-
-- name: Disable IPv6 if not configured
+- name: Disable IPv6 when requested (RedHat)
   community.general.nmcli:
     conn_name: "{{ _bootstrap_network_connection }}"
     ifname: "{{ _bootstrap_network_ifname }}"
@@ -422,5 +335,7 @@
     method6: disabled
     state: present
   when:
+    - _bootstrap_network_profile_changes_required | bool
+    - ansible_facts['os_family'] == 'RedHat'
     - bootstrap_ipv6_disabled | default(false)
     - bootstrap_static_ip6 | default('') | length == 0

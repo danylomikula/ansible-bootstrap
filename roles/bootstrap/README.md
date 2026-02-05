@@ -8,7 +8,7 @@ Universal server bootstrap role for initial server configuration.
 - **SSH Hardening**: Disable password auth, root login, custom port
 - **SSH Key Generation**: Auto-generate ed25519/rsa keys locally
 - **Hostname Configuration**: Set system hostname
-- **Static Network**: Configure static IPv4/IPv6 via NetworkManager
+- **Static Network**: Configure static IPv4/IPv6 via native OS backend (netplan/ifupdown on Debian-family, NetworkManager on RedHat)
 - **Firewall**: Configure firewalld with services, ports, custom zones
 - **Filesystem Expansion**: Expand root partition
 
@@ -84,6 +84,8 @@ ansible_user=admin
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `bootstrap_network_enabled` | `false` | Enable network configuration |
+| `bootstrap_network_interface` | `""` | Interface name (auto-detect from active route if empty) |
+| `bootstrap_network_connection` | `""` | NetworkManager connection name (RedHat only) |
 | `bootstrap_static_ip` | `""` | Static IPv4 (e.g., "10.0.20.51/24") |
 | `bootstrap_gateway` | `""` | IPv4 gateway |
 | `bootstrap_dns4` | `["1.1.1.1", "1.0.0.1"]` | DNS servers |
@@ -194,7 +196,7 @@ HCLOUD_TOKEN=<token> ./scripts/test-all-platforms.sh
 HCLOUD_TOKEN=<token> ./scripts/test-all-platforms.sh --scenario full --platform ubuntu2404
 
 # Direct Molecule run (same as CI)
-HCLOUD_TOKEN=<token> MOLECULE_HCLOUD_DISTRO=debian13 MOLECULE_HCLOUD_SCENARIO=default molecule test -s hetzner
+HCLOUD_TOKEN=<token> MOLECULE_HCLOUD_DISTRO=debian13 MOLECULE_HCLOUD_SCENARIO=full molecule test -s hetzner
 ```
 
 ## License

@@ -30,7 +30,7 @@ bootstrap_hostname: "{{ inventory_hostname }}"  # required if enabled
 # Network (static IP)
 bootstrap_network_enabled: false
 bootstrap_network_interface: ""  # network interface, auto-detect if empty
-bootstrap_network_connection: ""  # nmcli connection name, auto-detect if empty
+bootstrap_network_connection: ""  # NetworkManager connection name (used on RedHat only)
 # IPv4 - set per-host in inventory
 bootstrap_static_ip: ""  # e.g., "10.0.20.51/24"
 bootstrap_gateway: ""  # e.g., "10.0.20.1"

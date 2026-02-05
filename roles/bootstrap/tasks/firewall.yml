@@ -1,23 +1,8 @@
 ---
-# Firewall configuration tasks (firewalld - universal)
-# Note: Skipped in containers (Docker) as firewalld requires kernel access
-# Changes applied with immediate: true, reboot at end applies permanent config
-
-- name: Check if running in container
-  ansible.builtin.stat:
-    path: /.dockerenv
-  register: _bootstrap_dockerenv
-
-- name: Skip firewall in container
-  ansible.builtin.debug:
-    msg: "Firewall configuration skipped in container"
-  when: _bootstrap_dockerenv.stat.exists
-
 - name: Disable ufw in favour of firewalld (Debian/Ubuntu)
   community.general.ufw:
     state: disabled
   when:
-    - not _bootstrap_dockerenv.stat.exists
     - ansible_facts['os_family'] == 'Debian'
   failed_when: false
 
@@ -26,7 +11,6 @@
     name: unattended-upgrades
     state: stopped
   when:
-    - not _bootstrap_dockerenv.stat.exists
     - ansible_facts['os_family'] == 'Debian'
   failed_when: false
 
@@ -38,7 +22,6 @@
     state: present
     update_cache: true
   when:
-    - not _bootstrap_dockerenv.stat.exists
     - ansible_facts['os_family'] == 'Debian'
 
 - name: Install firewalld (RedHat)
@@ -46,7 +29,6 @@
     name: firewalld
     state: present
   when:
-    - not _bootstrap_dockerenv.stat.exists
     - ansible_facts['os_family'] == 'RedHat'
 
 - name: Start and enable firewalld
@@ -54,9 +36,7 @@
     name: firewalld
     state: started
     enabled: true
-  when: not _bootstrap_dockerenv.stat.exists
 
-# Custom zones - must reload after creating before they can be used
 - name: Create custom firewall zones
   ansible.posix.firewalld:
     zone: "{{ item.name }}"
@@ -64,7 +44,6 @@
     state: present
   loop: "{{ bootstrap_firewall_custom_zones | default([]) }}"
   when:
-    - not _bootstrap_dockerenv.stat.exists
     - (bootstrap_firewall_custom_zones | default([])) | length > 0
   register: _bootstrap_custom_zones_created
 
@@ -72,7 +51,6 @@
   ansible.builtin.command:
     cmd: firewall-cmd --reload
   when:
-    - not _bootstrap_dockerenv.stat.exists
     - _bootstrap_custom_zones_created is defined
     - _bootstrap_custom_zones_created.changed | default(false)
   changed_when: true
@@ -86,7 +64,6 @@
     state: enabled
   loop: "{{ bootstrap_firewall_custom_zones | default([]) }}"
   when:
-    - not _bootstrap_dockerenv.stat.exists
     - (bootstrap_firewall_custom_zones | default([])) | length > 0
     - item.interface is defined
 
@@ -99,7 +76,6 @@
     state: enabled
   loop: "{{ bootstrap_firewall_custom_zones | default([]) | subelements('ports', skip_missing=True) }}"
   when:
-    - not _bootstrap_dockerenv.stat.exists
     - (bootstrap_firewall_custom_zones | default([])) | length > 0
 
 - name: Ensure target firewall zone exists
@@ -107,7 +83,6 @@
     zone: "{{ bootstrap_firewall_zone }}"
     state: present
     permanent: true
-  when: not _bootstrap_dockerenv.stat.exists
 
 - name: Allow specified services
   ansible.posix.firewalld:
@@ -118,7 +93,6 @@
     state: enabled
   loop: "{{ bootstrap_firewall_services }}"
   when:
-    - not _bootstrap_dockerenv.stat.exists
     - (bootstrap_firewall_services | default([])) | length > 0
 
 - name: Allow specified ports
@@ -130,7 +104,6 @@
     state: enabled
   loop: "{{ bootstrap_firewall_ports }}"
   when:
-    - not _bootstrap_dockerenv.stat.exists
     - (bootstrap_firewall_ports | default([])) | length > 0
 
 - name: Allow ICMP echo-request
@@ -141,7 +114,6 @@
     immediate: true
     state: disabled
   when:
-    - not _bootstrap_dockerenv.stat.exists
     - bootstrap_firewall_allow_icmp | default(true)
 
 - name: Block ICMP echo-request
@@ -152,7 +124,6 @@
     immediate: true
     state: enabled
   when:
-    - not _bootstrap_dockerenv.stat.exists
     - not (bootstrap_firewall_allow_icmp | default(true))
 
 - name: Check current default zone
@@ -160,12 +131,10 @@
     cmd: firewall-cmd --get-default-zone
   register: _bootstrap_firewall_current_zone
   changed_when: false
-  when: not _bootstrap_dockerenv.stat.exists
 
 - name: Set default zone
   ansible.builtin.command:
     cmd: firewall-cmd --set-default-zone={{ bootstrap_firewall_zone }}
   when:
-    - not _bootstrap_dockerenv.stat.exists
     - _bootstrap_firewall_current_zone.stdout | default('') != bootstrap_firewall_zone
   changed_when: true
