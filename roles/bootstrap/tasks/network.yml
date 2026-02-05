@@ -54,6 +54,24 @@
     state: started
     enabled: true
 
+- name: Ensure NetworkManager manages ifupdown interfaces (Debian)
+  ansible.builtin.copy:
+    dest: /etc/NetworkManager/conf.d/10-bootstrap-managed.conf
+    content: |
+      [ifupdown]
+      managed=true
+    mode: "0644"
+  register: _bootstrap_nm_debian_managed_conf
+  when: ansible_facts['distribution'] == 'Debian'
+
+- name: Restart NetworkManager after Debian managed config change
+  ansible.builtin.systemd:
+    name: NetworkManager
+    state: restarted
+  when:
+    - ansible_facts['distribution'] == 'Debian'
+    - _bootstrap_nm_debian_managed_conf.changed | default(false)
+
 - name: Check for netplan
   ansible.builtin.stat:
     path: /etc/netplan

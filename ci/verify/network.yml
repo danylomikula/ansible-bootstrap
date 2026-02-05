@@ -19,13 +19,24 @@
       changed_when: false
       failed_when: (nm_active_connections.stdout_lines | default([]) | length) == 0
 
-    - name: Verify netplan renderer is set to NetworkManager on Debian/Ubuntu
+    - name: Check NetworkManager netplan renderer file
+      ansible.builtin.stat:
+        path: /etc/netplan/99-networkmanager.yaml
+      register: netplan_nm_renderer_file
+
+    - name: Verify netplan renderer is set to NetworkManager on Ubuntu
       ansible.builtin.command:
         cmd: grep -E '^\\s*renderer:\\s*NetworkManager$' /etc/netplan/99-networkmanager.yaml
       changed_when: false
       when:
-        - ansible_facts['os_family'] == 'Debian'
-        - ansible_facts['distribution'] in ['Ubuntu', 'Debian']
+        - ansible_facts['distribution'] == 'Ubuntu'
+        - netplan_nm_renderer_file.stat.exists
+
+    - name: Verify Debian NetworkManager ifupdown managed config exists
+      ansible.builtin.command:
+        cmd: grep -E '^\\s*managed\\s*=\\s*true$' /etc/NetworkManager/conf.d/10-bootstrap-managed.conf
+      changed_when: false
+      when: ansible_facts['distribution'] == 'Debian'
 
     - name: Verify firewalld service is running
       ansible.builtin.systemd:
