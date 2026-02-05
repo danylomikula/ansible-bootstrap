@@ -1,4 +1,6 @@
 ---
+shared_state: false
+
 dependency:
   name: galaxy
   options:

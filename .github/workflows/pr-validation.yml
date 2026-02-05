@@ -105,6 +105,10 @@ jobs:
         run: |
           pip install 'ansible-core>=2.20' 'molecule>=6.0.0'
 
+      - name: Install Ansible collections
+        if: ${{ steps.hcloud.outputs.enabled == 'true' }}
+        run: ansible-galaxy collection install -r requirements.yml
+
       - name: Setup hcloud CLI
         if: ${{ steps.hcloud.outputs.enabled == 'true' }}
         uses: hetznercloud/setup-hcloud@v1
@@ -116,7 +120,8 @@ jobs:
       - name: Run Molecule Hetzner scenario
         if: ${{ steps.hcloud.outputs.enabled == 'true' }}
         run: |
-          molecule test -s hetzner | tee ".ci_artifacts/molecule-${{ matrix.scenario }}-${{ matrix.distro }}.log"
+          set -o pipefail
+          molecule --debug test -s hetzner | tee ".ci_artifacts/molecule-${{ matrix.scenario }}-${{ matrix.distro }}.log"
         env:
           ANSIBLE_LOCAL_TEMP: /tmp/ansible-local
           ANSIBLE_REMOTE_TEMP: /tmp/ansible-remote
