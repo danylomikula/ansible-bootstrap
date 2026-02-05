@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.0.0](https://github.com/danylomikula/ansible-bootstrap/compare/v1.1.0...v2.0.0) (2026-02-05)
+
+
+### ⚠ BREAKING CHANGES
+
+* enhance CI with Hetzner E2E and new scenarios ([#7](https://github.com/danylomikula/ansible-bootstrap/issues/7))
+
+### Features
+
+* enhance CI with Hetzner E2E and new scenarios ([#7](https://github.com/danylomikula/ansible-bootstrap/issues/7)) ([a449b0c](https://github.com/danylomikula/ansible-bootstrap/commit/a449b0c932da6ead4d322b4157e83d848d3b4144))
+
 ## [1.1.0](https://github.com/danylomikula/ansible-bootstrap/compare/v1.0.0...v1.1.0) (2026-02-01)
 
 
