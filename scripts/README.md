@@ -24,7 +24,7 @@ Environment variables:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `HCLOUD_TOKEN` | required | Hetzner Cloud API token |
-| `HCLOUD_SERVER_TYPE` | `cx23` | Hetzner server type for CI instance |
+| `HCLOUD_SERVER_TYPE` | `cx33` | Hetzner server type for CI instance |
 | `HCLOUD_LOCATION` | `hel1` | Primary Hetzner location |
 | `HCLOUD_FALLBACK_LOCATIONS` | `fsn1,nbg1` | Extra locations used when primary has no capacity |
 | `GITHUB_WORKSPACE` | current dir | Project directory on runner |
