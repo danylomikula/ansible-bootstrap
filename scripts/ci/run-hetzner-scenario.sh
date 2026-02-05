@@ -198,12 +198,12 @@ main() {
 
   wait_for_cloud_init
 
-  primary_iface="$(run_remote "ip route show default | awk '{print \\$5}' | head -1" | tr -d '\r')"
-  primary_gw="$(run_remote "ip route show default | awk '{print \\$3}' | head -1" | tr -d '\r')"
+  primary_iface="$(run_remote "ip route show default | awk '{print \$5}' | head -1" | tr -d '\r')"
+  primary_gw="$(run_remote "ip route show default | awk '{print \$3}' | head -1" | tr -d '\r')"
   if [[ -z "${primary_iface}" ]]; then
     primary_iface="eth0"
   fi
-  primary_ipv4="$(run_remote "ip -4 -o addr show dev ${primary_iface} scope global | awk '{print \\$4}' | head -1" | tr -d '\r')"
+  primary_ipv4="$(run_remote "ip -4 -o addr show dev ${primary_iface} scope global | awk '{print \$4}' | head -1" | tr -d '\r')"
 
   cat > "${INVENTORY_PATH}" <<EOF
 [targets]
