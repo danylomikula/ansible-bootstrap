@@ -143,14 +143,14 @@ See [roles/bootstrap/README.md](roles/bootstrap/README.md) for detailed configur
 ## Testing
 
 ```bash
-# Local Docker-based Molecule test matrix
-./scripts/test-all-platforms.sh
+# Full Molecule Hetzner matrix
+HCLOUD_TOKEN=<token> ./scripts/test-all-platforms.sh
 
-# Ephemeral Hetzner VM test for one scenario
-HCLOUD_TOKEN=<token> ./scripts/ci/run-hetzner-scenario.sh ubuntu2404 full
+# One scenario on one distro
+HCLOUD_TOKEN=<token> ./scripts/test-all-platforms.sh --scenario network --platform ubuntu2404
 
-# Cleanup leaked Hetzner resources from one workflow run
-HCLOUD_TOKEN=<token> ./scripts/ci/cleanup-hcloud-run.sh <github_run_id>
+# Direct Molecule run (same scenario used by CI)
+HCLOUD_TOKEN=<token> MOLECULE_HCLOUD_DISTRO=debian13 MOLECULE_HCLOUD_SCENARIO=default molecule test -s hetzner
 ```
 
 ## License

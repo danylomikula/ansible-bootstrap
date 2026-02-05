@@ -26,7 +26,7 @@
 
     - name: Verify netplan renderer is set to NetworkManager on Ubuntu
       ansible.builtin.command:
-        cmd: grep -E '^\\s*renderer:\\s*NetworkManager$' /etc/netplan/99-networkmanager.yaml
+        cmd: grep -E '^[[:space:]]*renderer:[[:space:]]*NetworkManager([[:space:]]*|$)' /etc/netplan/99-networkmanager.yaml
       changed_when: false
       when:
         - ansible_facts['distribution'] == 'Ubuntu'

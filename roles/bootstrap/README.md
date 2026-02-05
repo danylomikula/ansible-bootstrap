@@ -31,9 +31,6 @@ Ansible collections (install via `ansible-galaxy collection install -r requireme
 - `community.general >= 11.0.0`
 - `community.crypto >= 2.0.0`
 
-For development/testing only:
-- `community.docker >= 3.0.0` (required for molecule tests)
-
 ## First Run
 
 On first run, when hosts don't have SSH keys configured yet:
@@ -190,18 +187,14 @@ bootstrap_firewall_custom_zones:
 ## Testing
 
 ```bash
-# Run all tests on all platforms
-./scripts/test-all-platforms.sh
+# Run full Hetzner Molecule matrix
+HCLOUD_TOKEN=<token> ./scripts/test-all-platforms.sh
 
-# Test specific scenario
-./scripts/test-all-platforms.sh --scenario full
+# Test specific scenario/platform
+HCLOUD_TOKEN=<token> ./scripts/test-all-platforms.sh --scenario full --platform ubuntu2404
 
-# Test specific platform
-./scripts/test-all-platforms.sh --platform debian13
-
-# Local Molecule scenarios: default, minimal, ssh-generate, full
-
-# Hetzner CI scenarios: default, minimal, ssh-generate, full, network, expand-fs, reboot
+# Direct Molecule run (same as CI)
+HCLOUD_TOKEN=<token> MOLECULE_HCLOUD_DISTRO=debian13 MOLECULE_HCLOUD_SCENARIO=default molecule test -s hetzner
 ```
 
 ## License

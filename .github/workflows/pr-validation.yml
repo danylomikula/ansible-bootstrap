@@ -62,7 +62,7 @@ jobs:
       HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
     strategy:
       fail-fast: false
-      max-parallel: 4
+      max-parallel: ${{ fromJSON(vars.HCLOUD_MAX_PARALLEL || '20') }}
       matrix:
         distro:
           - debian13
@@ -103,22 +103,26 @@ jobs:
       - name: Install tooling
         if: ${{ steps.hcloud.outputs.enabled == 'true' }}
         run: |
-          sudo apt-get update
-          sudo apt-get install -y jq
-          pip install 'ansible-core>=2.20'
-
-      - name: Install Ansible collections
-        if: ${{ steps.hcloud.outputs.enabled == 'true' }}
-        run: ansible-galaxy collection install -r requirements.yml
+          pip install 'ansible-core>=2.20' 'molecule>=6.0.0'
 
       - name: Setup hcloud CLI
         if: ${{ steps.hcloud.outputs.enabled == 'true' }}
         uses: hetznercloud/setup-hcloud@v1
 
-      - name: Run Hetzner scenario
+      - name: Ensure CI artifacts directory exists
         if: ${{ steps.hcloud.outputs.enabled == 'true' }}
-        run: ./scripts/ci/run-hetzner-scenario.sh "${{ matrix.distro }}" "${{ matrix.scenario }}"
+        run: mkdir -p .ci_artifacts
+
+      - name: Run Molecule Hetzner scenario
+        if: ${{ steps.hcloud.outputs.enabled == 'true' }}
+        run: |
+          molecule test -s hetzner | tee ".ci_artifacts/molecule-${{ matrix.scenario }}-${{ matrix.distro }}.log"
         env:
+          ANSIBLE_LOCAL_TEMP: /tmp/ansible-local
+          ANSIBLE_REMOTE_TEMP: /tmp/ansible-remote
+          ANSIBLE_HOME: /tmp/.ansible
+          MOLECULE_HCLOUD_DISTRO: ${{ matrix.distro }}
+          MOLECULE_HCLOUD_SCENARIO: ${{ matrix.scenario }}
           HCLOUD_SERVER_TYPE: ${{ vars.HCLOUD_SERVER_TYPE || 'cx33' }}
           HCLOUD_LOCATION: ${{ vars.HCLOUD_LOCATION || 'hel1' }}
           HCLOUD_FALLBACK_LOCATIONS: ${{ vars.HCLOUD_FALLBACK_LOCATIONS || 'fsn1,nbg1' }}
@@ -151,10 +155,6 @@ jobs:
             echo "HCLOUD_TOKEN is not configured. Cleanup is skipped."
           fi
 
-      - name: Checkout
-        if: ${{ steps.hcloud.outputs.enabled == 'true' }}
-        uses: actions/checkout@v6
-
       - name: Install dependencies
         if: ${{ steps.hcloud.outputs.enabled == 'true' }}
         run: |
@@ -165,6 +165,29 @@ jobs:
         if: ${{ steps.hcloud.outputs.enabled == 'true' }}
         uses: hetznercloud/setup-hcloud@v1
 
-      - name: Cleanup run resources
+      - name: Cleanup leaked run resources
         if: ${{ steps.hcloud.outputs.enabled == 'true' }}
-        run: ./scripts/ci/cleanup-hcloud-run.sh "${{ github.run_id }}"
+        run: |
+          set -euo pipefail
+          prefix="mol-${GITHUB_RUN_ID}-"
+          echo "Cleaning resources with prefix: ${prefix}"
+
+          mapfile -t server_ids < <(
+            hcloud server list --output json \
+              | jq -r --arg prefix "${prefix}" '.[] | select(.name | startswith($prefix)) | .id'
+          )
+          for server_id in "${server_ids[@]}"; do
+            if [ -n "${server_id}" ]; then
+              hcloud server delete "${server_id}" || true
+            fi
+          done
+
+          mapfile -t ssh_key_ids < <(
+            hcloud ssh-key list --output json \
+              | jq -r --arg prefix "${prefix}" '.[] | select(.name | startswith($prefix)) | .id'
+          )
+          for ssh_key_id in "${ssh_key_ids[@]}"; do
+            if [ -n "${ssh_key_id}" ]; then
+              hcloud ssh-key delete "${ssh_key_id}" || true
+            fi
+          done
