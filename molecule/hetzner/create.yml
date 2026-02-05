@@ -12,7 +12,7 @@
     molecule_hcloud_scenario: "{{ lookup('env', 'MOLECULE_HCLOUD_SCENARIO') | default('default', true) }}"
     molecule_run_id: "{{ lookup('env', 'GITHUB_RUN_ID') | default('local', true) }}"
     molecule_run_attempt: "{{ lookup('env', 'GITHUB_RUN_ATTEMPT') | default('0', true) }}"
-    molecule_random_suffix: "{{ lookup('pipe', 'date +%s')[-6:] }}"
+    molecule_random_suffix: "{{ (molecule_ephemeral_directory | hash('sha1'))[:6] }}"
     hcloud_image_map:
       debian13: debian-13
       ubuntu2404: ubuntu-24.04
@@ -91,6 +91,10 @@
       environment:
         HCLOUD_TOKEN: "{{ hcloud_token }}"
 
+    - name: Parse Hetzner SSH key create response
+      ansible.builtin.set_fact:
+        _hcloud_ssh_key_id: "{{ (_hcloud_ssh_key_create.stdout | from_json).ssh_key.id }}"
+
     - name: Attempt Hetzner server create by location
       ansible.builtin.command:
         cmd: >-
@@ -99,7 +103,7 @@
           --type {{ hcloud_server_type }}
           --image {{ hcloud_image_map[molecule_hcloud_distro] }}
           --location {{ item }}
-          --ssh-key {{ molecule_ssh_key_name }}
+          --ssh-key {{ _hcloud_ssh_key_id }}
           --output json
       loop: "{{ _hcloud_locations }}"
       register: _hcloud_server_create_attempts
