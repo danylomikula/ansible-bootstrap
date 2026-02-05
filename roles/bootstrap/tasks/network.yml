@@ -104,8 +104,6 @@
   register: _bootstrap_default_iface
   changed_when: false
   failed_when: false
-  when:
-    - bootstrap_network_connection | default('') | length == 0 or bootstrap_network_interface | default('') | length == 0
 
 - name: Get default network connection name from default interface
   ansible.builtin.command:
@@ -148,12 +146,24 @@
         else (
           (_bootstrap_default_iface.stdout | default('') | trim)
           if (_bootstrap_default_iface.stdout | default('') | trim) | length > 0
-          else (
-            ansible_facts['default_ipv4']['interface']
-            | default(ansible_default_ipv4.interface | default(''))
-          )
+          else (ansible_facts.get('default_ipv4', {}).get('interface', ''))
         )
       }}
+
+- name: Check selected interface exists
+  ansible.builtin.command:
+    cmd: ip -o link show "{{ _bootstrap_network_ifname }}"
+  register: _bootstrap_ifname_check
+  changed_when: false
+  failed_when: false
+  when: _bootstrap_network_ifname | default('') | length > 0
+
+- name: Correct invalid or loopback interface using default route
+  ansible.builtin.set_fact:
+    _bootstrap_network_ifname: "{{ _bootstrap_default_iface.stdout | default('') | trim }}"
+  when:
+    - (_bootstrap_ifname_check.rc | default(1)) != 0 or _bootstrap_network_ifname == 'lo'
+    - (_bootstrap_default_iface.stdout | default('') | trim) | length > 0
 
 - name: Get interface name from selected NetworkManager connection
   ansible.builtin.command:
@@ -183,6 +193,12 @@
   when:
     - _bootstrap_network_connection | default('') | length == 0
     - _bootstrap_network_ifname | default('') | length > 0
+
+- name: Ensure network interface name is set
+  ansible.builtin.fail:
+    msg: "Unable to determine a valid network interface. Set bootstrap_network_interface explicitly."
+  when:
+    - _bootstrap_network_ifname | default('') | length == 0 or _bootstrap_network_ifname == 'lo'
 
 # Fail fast if we cannot determine a connection name
 - name: Ensure network connection name is set
