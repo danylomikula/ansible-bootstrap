@@ -32,11 +32,27 @@
         - ansible_facts['distribution'] == 'Ubuntu'
         - netplan_nm_renderer_file.stat.exists
 
-    - name: Verify Debian NetworkManager ifupdown managed config exists
-      ansible.builtin.command:
-        cmd: grep -E '^\\s*managed\\s*=\\s*true$' /etc/NetworkManager/conf.d/10-bootstrap-managed.conf
-      changed_when: false
+    - name: Check Debian NetworkManager managed config snippet
+      ansible.builtin.stat:
+        path: /etc/NetworkManager/conf.d/10-bootstrap-managed.conf
+      register: debian_nm_managed_snippet
       when: ansible_facts['distribution'] == 'Debian'
+
+    - name: Verify Debian NetworkManager managed=true in snippet
+      ansible.builtin.command:
+        cmd: grep -E '^[[:space:]]*managed[[:space:]]*=[[:space:]]*true([[:space:]]*|$)' /etc/NetworkManager/conf.d/10-bootstrap-managed.conf
+      changed_when: false
+      when:
+        - ansible_facts['distribution'] == 'Debian'
+        - debian_nm_managed_snippet.stat.exists
+
+    - name: Verify Debian NetworkManager managed=true in main config fallback
+      ansible.builtin.command:
+        cmd: grep -E '^[[:space:]]*managed[[:space:]]*=[[:space:]]*true([[:space:]]*|$)' /etc/NetworkManager/NetworkManager.conf
+      changed_when: false
+      when:
+        - ansible_facts['distribution'] == 'Debian'
+        - not (debian_nm_managed_snippet.stat.exists | default(false))
 
     - name: Verify firewalld service is running
       ansible.builtin.systemd:
