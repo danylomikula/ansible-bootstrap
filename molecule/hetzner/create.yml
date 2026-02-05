@@ -109,8 +109,33 @@
       register: _hcloud_server_create_attempts
       changed_when: false
       failed_when: false
+      until: >-
+        (
+          (_hcloud_server_create_attempts.results | selectattr('rc', 'equalto', 0) | list | length) > 0
+        ) or (
+          (
+            _hcloud_server_create_attempts.results
+            | map(attribute='stderr')
+            | map('default', '')
+            | reject('search', 'resource_limit_exceeded|resource_unavailable')
+            | list
+            | length
+          ) > 0
+        )
+      retries: 20
+      delay: 30
       environment:
         HCLOUD_TOKEN: "{{ hcloud_token }}"
+
+    - name: Collect Hetzner server create errors
+      ansible.builtin.set_fact:
+        _hcloud_server_create_errors: >-
+          {{
+            _hcloud_server_create_attempts.results
+            | map(attribute='stderr')
+            | map('default', '')
+            | list
+          }}
 
     - name: Pick successful server create result
       ansible.builtin.set_fact:
@@ -125,7 +150,9 @@
         msg: >-
           Unable to create Hetzner server.
           Tried locations: {{ _hcloud_locations }}.
-          Errors: {{ _hcloud_server_create_attempts.results | map(attribute='stderr') | list }}
+          Errors: {{ _hcloud_server_create_errors }}.
+          If errors contain resource_limit_exceeded, reduce CI parallelism
+          (HCLOUD_MAX_PARALLEL) or increase Hetzner server limits.
       when: (_hcloud_server_create_success.rc | default(1)) != 0
 
     - name: Parse server create response
