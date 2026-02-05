@@ -64,21 +64,23 @@ jobs:
       fail-fast: false
       max-parallel: ${{ fromJSON(vars.HCLOUD_MAX_PARALLEL || '2') }}
       matrix:
-        distro:
-          - debian13
-          - ubuntu2404
-          - rockylinux10
-        scenario:
-          - default
-          - minimal
-          - ssh-generate
-          - full
-          - network
-          - expand-fs
-          - reboot
-        exclude:
-          - distro: rockylinux10
-            scenario: network
+        include:
+          - scenario: full
+            distro: debian13
+          - scenario: full
+            distro: ubuntu2404
+          - scenario: full
+            distro: rockylinux10
+          - scenario: network
+            distro: debian13
+          - scenario: network
+            distro: ubuntu2404
+          - scenario: minimal
+            distro: debian13
+          - scenario: expand-fs
+            distro: ubuntu2404
+          - scenario: reboot
+            distro: ubuntu2404
     steps:
       - name: Check Hetzner token
         id: hcloud

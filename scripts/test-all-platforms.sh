@@ -5,7 +5,7 @@
 # Usage examples:
 #   HCLOUD_TOKEN=... ./scripts/test-all-platforms.sh
 #   HCLOUD_TOKEN=... ./scripts/test-all-platforms.sh --scenario network --platform ubuntu2404
-#   HCLOUD_TOKEN=... ./scripts/test-all-platforms.sh converge --scenario default
+#   HCLOUD_TOKEN=... ./scripts/test-all-platforms.sh converge --scenario full
 #
 
 set -euo pipefail
@@ -22,9 +22,7 @@ DISTROS=(
 )
 
 SCENARIOS=(
-  "default"
   "minimal"
-  "ssh-generate"
   "full"
   "network"
   "expand-fs"
@@ -101,6 +99,20 @@ is_supported_combo() {
 
   # Network scenario is Debian/Ubuntu only in this project.
   if [[ "${scenario}" == "network" && "${distro}" == "rockylinux10" ]]; then
+    return 1
+  fi
+
+  # Minimal scenario runs on Debian only to reduce total matrix size.
+  if [[ "${scenario}" == "minimal" && "${distro}" != "debian13" ]]; then
+    return 1
+  fi
+
+  # Expand filesystem and reboot scenarios run on Ubuntu only.
+  if [[ "${scenario}" == "expand-fs" && "${distro}" != "ubuntu2404" ]]; then
+    return 1
+  fi
+
+  if [[ "${scenario}" == "reboot" && "${distro}" != "ubuntu2404" ]]; then
     return 1
   fi
 

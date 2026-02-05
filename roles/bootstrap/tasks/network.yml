@@ -129,6 +129,21 @@
         (bootstrap_ipv6_disabled | default(false))
       }}
 
+- name: Get interface used by current SSH client route
+  ansible.builtin.shell: |
+    set -o pipefail
+    client_ip="${SSH_CLIENT%% *}"
+    if [ -n "${client_ip}" ]; then
+      ip -o route get "${client_ip}" 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="dev"){print $(i+1); exit}}'
+    fi
+  args:
+    executable: /bin/bash
+  register: _bootstrap_ssh_iface
+  changed_when: false
+  failed_when: false
+  when:
+    - _bootstrap_network_profile_changes_required | bool
+
 - name: Get default route interface
   ansible.builtin.shell: |
     set -o pipefail
@@ -141,16 +156,27 @@
   when:
     - _bootstrap_network_profile_changes_required | bool
 
-- name: Get default network connection name from default interface
+- name: Determine preferred active interface
+  ansible.builtin.set_fact:
+    _bootstrap_preferred_iface: >-
+      {{
+        (_bootstrap_ssh_iface.stdout | default('') | trim)
+        if (_bootstrap_ssh_iface.stdout | default('') | trim) | length > 0
+        else (_bootstrap_default_iface.stdout | default('') | trim)
+      }}
+  when:
+    - _bootstrap_network_profile_changes_required | bool
+
+- name: Get default network connection name from preferred interface
   ansible.builtin.command:
-    cmd: nmcli -g GENERAL.CONNECTION device show "{{ _bootstrap_default_iface.stdout }}"
+    cmd: nmcli -g GENERAL.CONNECTION device show "{{ _bootstrap_preferred_iface }}"
   register: _bootstrap_nmcli_connection
   changed_when: false
   failed_when: false
   when:
     - _bootstrap_network_profile_changes_required | bool
     - bootstrap_network_connection | default('') | length == 0
-    - _bootstrap_default_iface.stdout | default('') | length > 0
+    - _bootstrap_preferred_iface | default('') | length > 0
 
 - name: Get first active network connection name (fallback)
   ansible.builtin.command:
@@ -183,8 +209,8 @@
         bootstrap_network_interface
         if bootstrap_network_interface | default('') | length > 0
         else (
-          (_bootstrap_default_iface.stdout | default('') | trim)
-          if (_bootstrap_default_iface.stdout | default('') | trim) | length > 0
+          (_bootstrap_preferred_iface | default('') | trim)
+          if (_bootstrap_preferred_iface | default('') | trim) | length > 0
           else (ansible_facts.get('default_ipv4', {}).get('interface', ''))
         )
       }}
@@ -202,11 +228,11 @@
 
 - name: Correct invalid or loopback interface using default route
   ansible.builtin.set_fact:
-    _bootstrap_network_ifname: "{{ _bootstrap_default_iface.stdout | default('') | trim }}"
+    _bootstrap_network_ifname: "{{ _bootstrap_preferred_iface | default('') | trim }}"
   when:
     - _bootstrap_network_profile_changes_required | bool
     - (_bootstrap_ifname_check.rc | default(1)) != 0 or _bootstrap_network_ifname == 'lo'
-    - (_bootstrap_default_iface.stdout | default('') | trim) | length > 0
+    - (_bootstrap_preferred_iface | default('') | trim) | length > 0
 
 - name: Get interface name from selected NetworkManager connection
   ansible.builtin.command:
@@ -233,12 +259,42 @@
     - _bootstrap_nmcli_ifname is defined
 
 - name: Set fallback NetworkManager connection name
-  ansible.builtin.set_fact:
-    _bootstrap_network_connection: "bootstrap-{{ _bootstrap_network_ifname }}"
+  ansible.builtin.command:
+    cmd: nmcli -t -f NAME,DEVICE con show --active
+  register: _bootstrap_nmcli_active_connections_late
+  changed_when: false
   when:
     - _bootstrap_network_profile_changes_required | bool
     - _bootstrap_network_connection | default('') | length == 0
     - _bootstrap_network_ifname | default('') | length > 0
+
+- name: Set connection name from active profile bound to selected interface
+  ansible.builtin.set_fact:
+    _bootstrap_network_connection: >-
+      {{
+        (
+          (_bootstrap_nmcli_active_connections_late.stdout_lines | default([]))
+          | select('search', ':' ~ _bootstrap_network_ifname ~ '$')
+          | map('regex_replace', '^(.*):[^:]+$', '\\1')
+          | list
+          | first
+        )
+        | default(
+            (
+              (_bootstrap_nmcli_active_connections_late.stdout_lines | default([]))
+              | reject('search', ':lo$')
+              | map('regex_replace', '^(.*):[^:]+$', '\\1')
+              | list
+              | first
+            ),
+            true
+          )
+        | default('')
+      }}
+  when:
+    - _bootstrap_network_profile_changes_required | bool
+    - _bootstrap_network_connection | default('') | length == 0
+    - _bootstrap_nmcli_active_connections_late is defined
 
 - name: Ensure network interface name is set
   ansible.builtin.fail:
@@ -261,12 +317,44 @@
     - _bootstrap_network_profile_changes_required | bool
     - _bootstrap_network_connection | default('') | length == 0
 
+- name: Set expected network link type from selected interface
+  ansible.builtin.set_fact:
+    _bootstrap_network_link_type: >-
+      {{
+        'wifi'
+        if (_bootstrap_network_ifname | default('') | lower) is match('^wl')
+        else 'ethernet'
+      }}
+  when: _bootstrap_network_profile_changes_required | bool
+
+- name: Get selected NetworkManager connection type
+  ansible.builtin.command:
+    cmd: nmcli -g connection.type connection show "{{ _bootstrap_network_connection }}"
+  register: _bootstrap_nmcli_connection_type
+  changed_when: false
+  failed_when: false
+  when: _bootstrap_network_profile_changes_required | bool
+
+- name: Set network profile type for nmcli module
+  ansible.builtin.set_fact:
+    _bootstrap_network_profile_type: >-
+      {{
+        'wifi'
+        if (_bootstrap_nmcli_connection_type.stdout | default('') | trim) in ['wifi', '802-11-wireless']
+        else (
+          'ethernet'
+          if (_bootstrap_nmcli_connection_type.stdout | default('') | trim) in ['ethernet', '802-3-ethernet']
+          else _bootstrap_network_link_type
+        )
+      }}
+  when: _bootstrap_network_profile_changes_required | bool
+
 # Network changes applied on reboot - no need to restart connection mid-playbook
 - name: Configure static IPv4
   community.general.nmcli:
     conn_name: "{{ _bootstrap_network_connection }}"
     ifname: "{{ _bootstrap_network_ifname }}"
-    type: ethernet
+    type: "{{ _bootstrap_network_profile_type }}"
     ip4:
       - "{{ bootstrap_static_ip }}"
     gw4: "{{ bootstrap_gateway }}"
@@ -282,7 +370,7 @@
   community.general.nmcli:
     conn_name: "{{ _bootstrap_network_connection }}"
     ifname: "{{ _bootstrap_network_ifname }}"
-    type: ethernet
+    type: "{{ _bootstrap_network_profile_type }}"
     ip6:
       - "{{ bootstrap_static_ip6 }}"
     gw6: "{{ bootstrap_gateway6 }}"
@@ -300,7 +388,7 @@
   community.general.nmcli:
     conn_name: "{{ _bootstrap_network_connection }}"
     ifname: "{{ _bootstrap_network_ifname }}"
-    type: ethernet
+    type: "{{ _bootstrap_network_profile_type }}"
     dns6: "{{ bootstrap_dns6 }}"
     dns6_ignore_auto: "{{ bootstrap_dns6_ignore_auto | default(true) }}"
     method6: "{{ bootstrap_ipv6_method | default('auto') }}"
@@ -330,7 +418,7 @@
   community.general.nmcli:
     conn_name: "{{ _bootstrap_network_connection }}"
     ifname: "{{ _bootstrap_network_ifname }}"
-    type: ethernet
+    type: "{{ _bootstrap_network_profile_type }}"
     method6: disabled
     state: present
   when:

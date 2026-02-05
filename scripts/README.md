@@ -9,7 +9,7 @@ Run Molecule Hetzner scenarios across distro/scenario matrix.
 ### Quick Start
 
 ```bash
-# Run full Hetzner matrix (3 distros x 7 scenarios, with project exclusions)
+# Run compact Hetzner matrix (8 curated jobs)
 HCLOUD_TOKEN=<token> ./scripts/test-all-platforms.sh
 
 # Run one scenario on one distro
@@ -63,16 +63,19 @@ Default command is `test`. You can pass any Molecule command:
 
 | Scenario | Description |
 |----------|-------------|
-| `default` | User + SSH hardening + hostname + firewall |
 | `minimal` | Minimal user setup only |
-| `ssh-generate` | Local SSH key generation + deployment |
-| `full` | Extended user/SSH/firewall setup |
+| `full` | Extended user/SSH/firewall setup (includes SSH key generation checks) |
 | `network` | NetworkManager + firewall validation (Debian/Ubuntu) |
 | `expand-fs` | Filesystem expansion checks |
 | `reboot` | Reboot flow validation |
 
 ### Notes
 
-- `network/rockylinux10` is skipped by design in this project.
+- Default matrix combinations:
+  - `full`: `debian13`, `ubuntu2404`, `rockylinux10`
+  - `network`: `debian13`, `ubuntu2404`
+  - `minimal`: `debian13`
+  - `expand-fs`: `ubuntu2404`
+  - `reboot`: `ubuntu2404`
 - CI uses the same Molecule `hetzner` scenario as this script.
 - Workflow-level cleanup removes leaked `mol-<run_id>-*` resources when needed.
