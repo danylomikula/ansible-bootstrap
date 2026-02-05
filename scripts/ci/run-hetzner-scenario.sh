@@ -201,12 +201,29 @@ main() {
 
   wait_for_cloud_init
 
-  primary_iface="$(run_remote "ip route show default | awk '{print \$5}' | head -1" | tr -d '\r')"
-  primary_gw="$(run_remote "ip route show default | awk '{print \$3}' | head -1" | tr -d '\r')"
-  if [[ -z "${primary_iface}" ]]; then
-    primary_iface="eth0"
+  primary_iface="$(
+    run_remote "ip -o route show default | awk '{for(i=1;i<=NF;i++) if(\$i==\"dev\"){print \$(i+1); exit}}'" | tr -d '\r'
+  )"
+  if [[ -z "${primary_iface}" || "${primary_iface}" == "lo" ]]; then
+    primary_iface="$(
+      run_remote "ip -o route get 1.1.1.1 | awk '{for(i=1;i<=NF;i++) if(\$i==\"dev\"){print \$(i+1); exit}}'" | tr -d '\r'
+    )"
   fi
+  if [[ -z "${primary_iface}" || "${primary_iface}" == "lo" ]]; then
+    echo "Unable to detect a valid primary network interface (got: '${primary_iface}')." >&2
+    exit 1
+  fi
+
+  primary_gw="$(run_remote "ip -o route show default | awk '{for(i=1;i<=NF;i++) if(\$i==\"via\"){print \$(i+1); exit}}'" | tr -d '\r')"
+  if [[ -z "${primary_gw}" ]]; then
+    primary_gw="$(run_remote "ip -o route get 1.1.1.1 | awk '{for(i=1;i<=NF;i++) if(\$i==\"via\"){print \$(i+1); exit}}'" | tr -d '\r')"
+  fi
+
   primary_ipv4="$(run_remote "ip -4 -o addr show dev ${primary_iface} scope global | awk '{print \$4}' | head -1" | tr -d '\r')"
+  if [[ -z "${primary_ipv4}" ]]; then
+    echo "Unable to detect IPv4 CIDR on interface ${primary_iface}." >&2
+    exit 1
+  fi
 
   cat > "${INVENTORY_PATH}" <<EOF
 [targets]

@@ -200,6 +200,11 @@
   when:
     - _bootstrap_network_ifname | default('') | length == 0 or _bootstrap_network_ifname == 'lo'
 
+- name: Ensure selected network interface exists
+  ansible.builtin.command:
+    cmd: ip -o link show "{{ _bootstrap_network_ifname }}"
+  changed_when: false
+
 # Fail fast if we cannot determine a connection name
 - name: Ensure network connection name is set
   ansible.builtin.fail:
@@ -210,7 +215,7 @@
 - name: Configure static IPv4
   community.general.nmcli:
     conn_name: "{{ _bootstrap_network_connection }}"
-    ifname: "{{ _bootstrap_network_ifname | default(omit) }}"
+    ifname: "{{ _bootstrap_network_ifname }}"
     type: ethernet
     ip4:
       - "{{ bootstrap_static_ip }}"
@@ -226,7 +231,7 @@
 - name: Configure static IPv6 (manual mode)
   community.general.nmcli:
     conn_name: "{{ _bootstrap_network_connection }}"
-    ifname: "{{ _bootstrap_network_ifname | default(omit) }}"
+    ifname: "{{ _bootstrap_network_ifname }}"
     type: ethernet
     ip6:
       - "{{ bootstrap_static_ip6 }}"
@@ -244,7 +249,7 @@
 - name: Configure IPv6 with DHCPv6/SLAAC
   community.general.nmcli:
     conn_name: "{{ _bootstrap_network_connection }}"
-    ifname: "{{ _bootstrap_network_ifname | default(omit) }}"
+    ifname: "{{ _bootstrap_network_ifname }}"
     type: ethernet
     dns6: "{{ bootstrap_dns6 }}"
     dns6_ignore_auto: "{{ bootstrap_dns6_ignore_auto | default(true) }}"
@@ -274,7 +279,7 @@
 - name: Disable IPv6 if not configured
   community.general.nmcli:
     conn_name: "{{ _bootstrap_network_connection }}"
-    ifname: "{{ _bootstrap_network_ifname | default(omit) }}"
+    ifname: "{{ _bootstrap_network_ifname }}"
     type: ethernet
     method6: disabled
     state: present
