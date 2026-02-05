@@ -116,8 +116,9 @@ jobs:
         if: ${{ steps.hcloud.outputs.enabled == 'true' }}
         run: ./scripts/ci/run-hetzner-scenario.sh "${{ matrix.distro }}" "${{ matrix.scenario }}"
         env:
-          HCLOUD_SERVER_TYPE: ${{ vars.HCLOUD_SERVER_TYPE }}
-          HCLOUD_LOCATION: ${{ vars.HCLOUD_LOCATION }}
+          HCLOUD_SERVER_TYPE: ${{ vars.HCLOUD_SERVER_TYPE || 'cx23' }}
+          HCLOUD_LOCATION: ${{ vars.HCLOUD_LOCATION || 'hel1' }}
+          HCLOUD_FALLBACK_LOCATIONS: ${{ vars.HCLOUD_FALLBACK_LOCATIONS || 'fsn1,nbg1' }}
           PY_COLORS: "1"
           ANSIBLE_FORCE_COLOR: "1"
 

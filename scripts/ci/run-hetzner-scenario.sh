@@ -12,7 +12,8 @@ LOG_DIR="${PROJECT_DIR}/.ci_artifacts"
 mkdir -p "${LOG_DIR}"
 
 HCLOUD_SERVER_TYPE="${HCLOUD_SERVER_TYPE:-cx23}"
-HCLOUD_LOCATION="${HCLOUD_LOCATION:-fsn1}"
+HCLOUD_LOCATION="${HCLOUD_LOCATION:-hel1}"
+HCLOUD_FALLBACK_LOCATIONS="${HCLOUD_FALLBACK_LOCATIONS:-fsn1,nbg1}"
 
 SERVER_NAME_BASE="ci-${GITHUB_RUN_ID:-local}-${GITHUB_RUN_ATTEMPT:-0}-${DISTRO}-${SCENARIO}"
 SERVER_NAME="$(echo "${SERVER_NAME_BASE}" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9-' '-')"
@@ -101,12 +102,17 @@ run_remote() {
 
 main() {
   local image
-  local create_output
+  local create_output=""
+  local create_error
+  local location
+  local location_item
   local primary_iface
   local primary_ipv4
   local primary_gw
   local scenario_playbook
   local verify_playbook
+  local -a hcloud_locations
+  local -a hcloud_fallback_locations
 
   require_cmd hcloud
   require_cmd jq
@@ -135,15 +141,45 @@ main() {
   ssh-keygen -t ed25519 -N "" -f "${KEY_PATH}" -C "${KEY_NAME}" >/dev/null
   hcloud ssh-key create --name "${KEY_NAME}" --public-key-from-file "${KEY_PATH}.pub" >/dev/null
 
-  create_output="$(
-    hcloud server create \
-      --name "${SERVER_NAME}" \
-      --type "${HCLOUD_SERVER_TYPE}" \
-      --image "${image}" \
-      --location "${HCLOUD_LOCATION}" \
-      --ssh-key "${KEY_NAME}" \
-      --output json
-  )"
+  hcloud_locations=("${HCLOUD_LOCATION}")
+  IFS=',' read -r -a hcloud_fallback_locations <<< "${HCLOUD_FALLBACK_LOCATIONS}"
+  for location_item in "${hcloud_fallback_locations[@]}"; do
+    location="$(echo "${location_item}" | xargs)"
+    if [[ -n "${location}" && "${location}" != "${HCLOUD_LOCATION}" ]]; then
+      hcloud_locations+=("${location}")
+    fi
+  done
+
+  for location in "${hcloud_locations[@]}"; do
+    echo "Attempting Hetzner server create in location ${location}..."
+    if create_output="$(
+      hcloud server create \
+        --name "${SERVER_NAME}" \
+        --type "${HCLOUD_SERVER_TYPE}" \
+        --image "${image}" \
+        --location "${location}" \
+        --ssh-key "${KEY_NAME}" \
+        --output json 2>"${TMP_DIR}/hcloud-create-error.log"
+    )"; then
+      HCLOUD_LOCATION="${location}"
+      break
+    fi
+
+    create_error="$(cat "${TMP_DIR}/hcloud-create-error.log" 2>/dev/null || true)"
+    if echo "${create_error}" | grep -q "resource_unavailable"; then
+      echo "Capacity unavailable in ${location}, trying next location..."
+      continue
+    fi
+
+    echo "Hetzner server create failed in ${location}:" >&2
+    echo "${create_error}" >&2
+    exit 1
+  done
+
+  if [[ -z "${create_output}" ]]; then
+    echo "Failed to create Hetzner server in locations: ${hcloud_locations[*]}" >&2
+    exit 1
+  fi
 
   SERVER_ID="$(echo "${create_output}" | jq -r '.server.id')"
   SERVER_IP="$(echo "${create_output}" | jq -r '.server.public_net.ipv4.ip')"
@@ -153,7 +189,7 @@ main() {
     exit 1
   fi
 
-  echo "Provisioned ${SERVER_NAME} (${SERVER_IP}) for ${DISTRO}/${SCENARIO}"
+  echo "Provisioned ${SERVER_NAME} (${SERVER_IP}) for ${DISTRO}/${SCENARIO} in ${HCLOUD_LOCATION}"
 
   if ! wait_for_ssh "${SERVER_IP}"; then
     echo "Server did not become reachable over SSH in time." >&2

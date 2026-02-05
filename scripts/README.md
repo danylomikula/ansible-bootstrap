@@ -25,7 +25,8 @@ Environment variables:
 |----------|---------|-------------|
 | `HCLOUD_TOKEN` | required | Hetzner Cloud API token |
 | `HCLOUD_SERVER_TYPE` | `cx23` | Hetzner server type for CI instance |
-| `HCLOUD_LOCATION` | `fsn1` | Hetzner location |
+| `HCLOUD_LOCATION` | `hel1` | Primary Hetzner location |
+| `HCLOUD_FALLBACK_LOCATIONS` | `fsn1,nbg1` | Extra locations used when primary has no capacity |
 | `GITHUB_WORKSPACE` | current dir | Project directory on runner |
 
 ### scripts/ci/cleanup-hcloud-run.sh
