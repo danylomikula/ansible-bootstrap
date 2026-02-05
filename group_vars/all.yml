@@ -1,7 +1,7 @@
 ---
 # User configuration
 bootstrap_user_enabled: true
-bootstrap_user: "pixel"
+bootstrap_user: "ansible"
 bootstrap_user_password: ""  # hashed password, leave empty for no password
 bootstrap_user_group: ""  # leave empty to auto-detect (wheel/sudo)
 bootstrap_user_extra_groups: []
@@ -53,16 +53,14 @@ bootstrap_firewall_enabled: true
 bootstrap_firewall_zone: "public"
 bootstrap_firewall_services:
   - ssh
-  - http
-  - https
-  - dns
 bootstrap_firewall_ports: []  # e.g., [{ port: 8080, proto: tcp }]
-bootstrap_firewall_custom_zones:
-  - name: ftl
-    interface: lo
-    ports:
-      - port: 4711
-        proto: tcp
+bootstrap_firewall_custom_zones: []
+# Example:
+#   - name: ftl
+#     interface: lo
+#     ports:
+#       - port: 4711
+#         proto: tcp
 bootstrap_firewall_allow_icmp: true
 
 # Expand filesystem
