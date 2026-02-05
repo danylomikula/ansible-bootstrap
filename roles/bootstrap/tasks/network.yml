@@ -95,6 +95,22 @@
     - _bootstrap_netplan_config.changed | default(false)
     - not (bootstrap_reboot_enabled | default(false))
 
+- name: Determine if NetworkManager connection profile changes are required
+  ansible.builtin.set_fact:
+    _bootstrap_network_profile_changes_required: >-
+      {{
+        (
+          (bootstrap_static_ip | default('') | length > 0)
+          and (bootstrap_gateway | default('') | length > 0)
+        ) or (
+          (bootstrap_static_ip6 | default('') | length > 0)
+          and (bootstrap_gateway6 | default('') | length > 0)
+          and not (bootstrap_ipv6_dhcpv6 | default(false))
+        ) or
+        (bootstrap_ipv6_dhcpv6 | default(false)) or
+        (bootstrap_ipv6_disabled | default(false))
+      }}
+
 - name: Get default route interface
   ansible.builtin.shell: |
     set -o pipefail
@@ -104,6 +120,8 @@
   register: _bootstrap_default_iface
   changed_when: false
   failed_when: false
+  when:
+    - _bootstrap_network_profile_changes_required | bool
 
 - name: Get default network connection name from default interface
   ansible.builtin.command:
@@ -112,6 +130,7 @@
   changed_when: false
   failed_when: false
   when:
+    - _bootstrap_network_profile_changes_required | bool
     - bootstrap_network_connection | default('') | length == 0
     - _bootstrap_default_iface.stdout | default('') | length > 0
 
@@ -121,6 +140,7 @@
   register: _bootstrap_nmcli_active_connections
   changed_when: false
   when:
+    - _bootstrap_network_profile_changes_required | bool
     - bootstrap_network_connection | default('') | length == 0
     - (_bootstrap_nmcli_connection.stdout | default('') | trim) in ['', '--']
 
@@ -136,6 +156,7 @@
           else (_bootstrap_nmcli_active_connections.stdout_lines | default([]) | first | default(''))
         )
       }}
+  when: _bootstrap_network_profile_changes_required | bool
 
 - name: Set interface name fact
   ansible.builtin.set_fact:
@@ -149,6 +170,7 @@
           else (ansible_facts.get('default_ipv4', {}).get('interface', ''))
         )
       }}
+  when: _bootstrap_network_profile_changes_required | bool
 
 - name: Check selected interface exists
   ansible.builtin.command:
@@ -156,12 +178,15 @@
   register: _bootstrap_ifname_check
   changed_when: false
   failed_when: false
-  when: _bootstrap_network_ifname | default('') | length > 0
+  when:
+    - _bootstrap_network_profile_changes_required | bool
+    - _bootstrap_network_ifname | default('') | length > 0
 
 - name: Correct invalid or loopback interface using default route
   ansible.builtin.set_fact:
     _bootstrap_network_ifname: "{{ _bootstrap_default_iface.stdout | default('') | trim }}"
   when:
+    - _bootstrap_network_profile_changes_required | bool
     - (_bootstrap_ifname_check.rc | default(1)) != 0 or _bootstrap_network_ifname == 'lo'
     - (_bootstrap_default_iface.stdout | default('') | trim) | length > 0
 
@@ -172,6 +197,7 @@
   changed_when: false
   failed_when: false
   when:
+    - _bootstrap_network_profile_changes_required | bool
     - _bootstrap_network_ifname | default('') | length == 0
     - _bootstrap_network_connection | default('') | length > 0
 
@@ -184,6 +210,7 @@
         else (_bootstrap_network_ifname | default(''))
       }}
   when:
+    - _bootstrap_network_profile_changes_required | bool
     - _bootstrap_network_ifname | default('') | length == 0
     - _bootstrap_nmcli_ifname is defined
 
@@ -191,6 +218,7 @@
   ansible.builtin.set_fact:
     _bootstrap_network_connection: "bootstrap-{{ _bootstrap_network_ifname }}"
   when:
+    - _bootstrap_network_profile_changes_required | bool
     - _bootstrap_network_connection | default('') | length == 0
     - _bootstrap_network_ifname | default('') | length > 0
 
@@ -198,18 +226,22 @@
   ansible.builtin.fail:
     msg: "Unable to determine a valid network interface. Set bootstrap_network_interface explicitly."
   when:
+    - _bootstrap_network_profile_changes_required | bool
     - _bootstrap_network_ifname | default('') | length == 0 or _bootstrap_network_ifname == 'lo'
 
 - name: Ensure selected network interface exists
   ansible.builtin.command:
     cmd: ip -o link show "{{ _bootstrap_network_ifname }}"
   changed_when: false
+  when: _bootstrap_network_profile_changes_required | bool
 
 # Fail fast if we cannot determine a connection name
 - name: Ensure network connection name is set
   ansible.builtin.fail:
     msg: "Unable to determine NetworkManager connection name. Set bootstrap_network_connection (and bootstrap_network_interface if needed) explicitly."
-  when: _bootstrap_network_connection | default('') | length == 0
+  when:
+    - _bootstrap_network_profile_changes_required | bool
+    - _bootstrap_network_connection | default('') | length == 0
 
 # Network changes applied on reboot - no need to restart connection mid-playbook
 - name: Configure static IPv4

@@ -19,6 +19,8 @@ Arguments:
 1. `distro` (`debian13`, `ubuntu2404`, `rockylinux10`)
 2. `scenario` (`default`, `minimal`, `ssh-generate`, `full`, `network`, `expand-fs`, `reboot`)
 
+Note: in CI, the `network` scenario validates migration to NetworkManager and firewall rules without changing static IP addresses.
+
 Environment variables:
 
 | Variable | Default | Description |

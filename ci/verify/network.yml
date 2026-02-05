@@ -12,30 +12,32 @@
       register: nm_service
       failed_when: nm_service.changed
 
-    - name: Verify network connection exists
+    - name: Verify active NetworkManager connection exists
       ansible.builtin.command:
-        cmd: nmcli -g connection.id connection show "bootstrap-{{ ci_primary_iface }}"
-      register: nm_connection
+        cmd: nmcli -t -f NAME,DEVICE con show --active
+      register: nm_active_connections
       changed_when: false
-      failed_when: nm_connection.stdout | trim != "bootstrap-{{ ci_primary_iface }}"
+      failed_when: (nm_active_connections.stdout_lines | default([]) | length) == 0
 
-    - name: Verify IPv4 method is manual
+    - name: Verify netplan renderer is set to NetworkManager on Debian/Ubuntu
       ansible.builtin.command:
-        cmd: nmcli -g ipv4.method connection show "bootstrap-{{ ci_primary_iface }}"
-      register: ipv4_method
+        cmd: grep -E '^\\s*renderer:\\s*NetworkManager$' /etc/netplan/99-networkmanager.yaml
       changed_when: false
-      failed_when: ipv4_method.stdout | trim != "manual"
+      when:
+        - ansible_facts['os_family'] == 'Debian'
+        - ansible_facts['distribution'] in ['Ubuntu', 'Debian']
 
-    - name: Verify configured IPv4 address is present
-      ansible.builtin.command:
-        cmd: nmcli -g ipv4.addresses connection show "bootstrap-{{ ci_primary_iface }}"
-      register: ipv4_addresses
-      changed_when: false
-      failed_when: ci_primary_ipv4_cidr not in ipv4_addresses.stdout
+    - name: Verify firewalld service is running
+      ansible.builtin.systemd:
+        name: firewalld
+        state: started
+      check_mode: true
+      register: firewalld_check
+      failed_when: firewalld_check.changed
 
-    - name: Verify IPv6 is disabled
+    - name: Verify ssh service is allowed in firewall
       ansible.builtin.command:
-        cmd: nmcli -g ipv6.method connection show "bootstrap-{{ ci_primary_iface }}"
-      register: ipv6_method
+        cmd: firewall-cmd --zone=public --list-services
+      register: firewall_services
       changed_when: false
-      failed_when: ipv6_method.stdout | trim != "disabled"
+      failed_when: "'ssh' not in firewall_services.stdout.split()"

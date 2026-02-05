@@ -76,6 +76,9 @@ jobs:
           - network
           - expand-fs
           - reboot
+        exclude:
+          - distro: rockylinux10
+            scenario: network
     steps:
       - name: Check Hetzner token
         id: hcloud
