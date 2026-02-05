@@ -16,22 +16,10 @@
     - _bootstrap_nmcli_check.rc != 0
     - ansible_facts['os_family'] == 'Debian'
 
-- name: Wait for package manager processes to finish (Debian/Ubuntu)
-  ansible.builtin.shell: |
-    set -o pipefail
-    for _ in $(seq 1 120); do
-      if ! pgrep -x apt-get >/dev/null 2>&1 \
-        && ! pgrep -x dpkg >/dev/null 2>&1 \
-        && ! pgrep -f unattended-upgrade >/dev/null 2>&1; then
-        exit 0
-      fi
-      sleep 5
-    done
-    echo "Timed out waiting for apt/dpkg processes to finish." >&2
-    exit 1
-  args:
-    executable: /bin/bash
-  changed_when: false
+- name: Wait for SSH after stopping unattended-upgrades
+  ansible.builtin.wait_for_connection:
+    delay: 2
+    timeout: 120
   when:
     - _bootstrap_nmcli_check.rc != 0
     - ansible_facts['os_family'] == 'Debian'

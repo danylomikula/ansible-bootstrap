@@ -10,6 +10,9 @@ KEY_PATH="${TMP_DIR}/ci_id_ed25519"
 INVENTORY_PATH="${TMP_DIR}/inventory.ini"
 LOG_DIR="${PROJECT_DIR}/.ci_artifacts"
 mkdir -p "${LOG_DIR}"
+RUN_LOG="${LOG_DIR}/${DISTRO}-${SCENARIO}-runner.log"
+touch "${RUN_LOG}"
+exec > >(tee -a "${RUN_LOG}") 2>&1
 
 HCLOUD_SERVER_TYPE="${HCLOUD_SERVER_TYPE:-cx33}"
 HCLOUD_LOCATION="${HCLOUD_LOCATION:-hel1}"
