@@ -7,6 +7,8 @@
     state: restarted
 
 - name: Reboot system
-  ansible.builtin.reboot:
-    msg: "Ansible triggered reboot"
-    reboot_timeout: 300
+  ansible.builtin.shell: sleep 2 && shutdown -r now "Ansible triggered reboot"
+  async: 1
+  poll: 0
+  changed_when: true
+  failed_when: false
