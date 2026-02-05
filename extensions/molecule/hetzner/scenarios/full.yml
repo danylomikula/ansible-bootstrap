@@ -1,32 +1,22 @@
 ---
-- name: Converge - Full Configuration
-  hosts: all
+- name: CI Scenario - Full
+  hosts: targets
   become: true
   vars:
-    # User with custom group and extra groups
     bootstrap_user: "fulladmin"
     bootstrap_user_group: "operators"
     bootstrap_user_create_group: true
-    bootstrap_user_extra_groups:
-      - adm
-
-    # SSH key generation
+    bootstrap_user_extra_groups: "{{ ['adm'] if ansible_facts['os_family'] == 'Debian' else ['wheel'] }}"
     bootstrap_ssh_pubkey: ""
     bootstrap_ssh_key_generate: true
-    bootstrap_ssh_key_local_dir: "{{ lookup('env', 'MOLECULE_PROJECT_DIRECTORY') }}/molecule/.ssh_keys"
+    bootstrap_ssh_key_local_dir: "{{ lookup('env', 'CI_PROJECT_DIR') }}/.ci_ssh_keys"
     bootstrap_ssh_key_type: "ed25519"
-
-    # SSH hardening with custom port
     bootstrap_ssh_enabled: true
     bootstrap_ssh_port: 2222
     bootstrap_ssh_password_auth: false
-    bootstrap_ssh_root_login: false
-
-    # Hostname
+    bootstrap_ssh_root_login: true
     bootstrap_hostname_enabled: true
     bootstrap_hostname: "full-test-server"
-
-    # Firewall with custom ports and zones
     bootstrap_firewall_enabled: true
     bootstrap_firewall_zone: "public"
     bootstrap_firewall_services:
@@ -40,11 +30,8 @@
         ports:
           - { port: 9999, proto: tcp }
     bootstrap_firewall_allow_icmp: true
-
-    # Disabled for Docker
     bootstrap_network_enabled: false
     bootstrap_expand_fs_enabled: false
     bootstrap_reboot_enabled: false
-
   roles:
     - bootstrap

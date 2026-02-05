@@ -15,7 +15,7 @@ exclude_paths:
   - __pycache__/
   - "*.pyc"
   - "**/*vault.yml"
-  - molecule/
+  - extensions/molecule/
 
 # Enable/disable specific rules
 # See: https://ansible.readthedocs.io/projects/lint/rules/

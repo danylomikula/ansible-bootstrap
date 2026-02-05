@@ -1,7 +1,4 @@
 ---
-# Bootstrap role - universal server initialization
-# Supports: Debian, Ubuntu, Rocky Linux, Raspberry Pi OS
-
 - name: Gather OS family
   ansible.builtin.setup:
     gather_subset:
@@ -11,7 +8,6 @@
 - name: Set OS-specific defaults
   ansible.builtin.set_fact:
     _bootstrap_sudo_group: "{{ 'wheel' if ansible_facts['os_family'] == 'RedHat' else 'sudo' }}"
-    _bootstrap_pkg_manager: "{{ 'dnf' if ansible_facts['os_family'] == 'RedHat' else 'apt' }}"
   tags: always
 
 - name: Include user tasks
@@ -21,7 +17,7 @@
 
 - name: Include hostname tasks
   ansible.builtin.include_tasks: hostname.yml
-  when: bootstrap_hostname_enabled | default(true) and bootstrap_hostname | default('') | length > 0
+  when: bootstrap_hostname_enabled | default(true)
   tags: ['bootstrap', 'hostname']
 
 - name: Include firewall tasks
@@ -34,19 +30,16 @@
   when: bootstrap_expand_fs_enabled | default(false)
   tags: ['bootstrap', 'expand_fs']
 
-# SSH hardening before network - so password auth still works if network fails
 - name: Include SSH hardening tasks
   ansible.builtin.include_tasks: ssh.yml
   when: bootstrap_ssh_enabled | default(true)
   tags: ['bootstrap', 'ssh']
 
-# Network LAST - IP change will disconnect, playbook ends here
 - name: Include network tasks
   ansible.builtin.include_tasks: network.yml
   when: bootstrap_network_enabled | default(false)
   tags: ['bootstrap', 'network']
 
-# Async reboot - don't wait for host to come back (IP may change after network config)
 - name: Reboot if requested
   ansible.builtin.shell: sleep 2 && shutdown -r now "Bootstrap complete, rebooting"
   async: 1

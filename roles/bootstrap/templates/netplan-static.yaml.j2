@@ -1,0 +1,63 @@
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    {{ _bootstrap_network_ifname }}:
+{% if _bootstrap_network_ipv4_static_configured | bool %}
+      dhcp4: false
+{% else %}
+      dhcp4: true
+{% endif %}
+{% if bootstrap_ipv6_disabled | default(false) %}
+      dhcp6: false
+      accept-ra: false
+{% elif bootstrap_ipv6_dhcpv6 | default(false) %}
+      dhcp6: true
+{% elif _bootstrap_network_ipv6_static_configured | bool %}
+      dhcp6: false
+{% endif %}
+{% set bootstrap_netplan_addresses = [] %}
+{% if _bootstrap_network_ipv4_static_configured | bool %}
+{%   set _ = bootstrap_netplan_addresses.append(bootstrap_static_ip) %}
+{% endif %}
+{% if (_bootstrap_network_ipv6_static_configured | bool) or ((bootstrap_ipv6_dhcpv6 | default(false)) and (bootstrap_static_ip6 | default('') | length > 0)) %}
+{%   set _ = bootstrap_netplan_addresses.append(bootstrap_static_ip6) %}
+{% endif %}
+{% if bootstrap_netplan_addresses | length > 0 %}
+      addresses:
+{% for bootstrap_addr in bootstrap_netplan_addresses %}
+        - "{{ bootstrap_addr }}"
+{% endfor %}
+{% endif %}
+{% set bootstrap_netplan_dns = [] %}
+{% if _bootstrap_network_ipv4_static_configured | bool %}
+{%   for bootstrap_dns in bootstrap_dns4 | default([]) %}
+{%     set _ = bootstrap_netplan_dns.append(bootstrap_dns) %}
+{%   endfor %}
+{% endif %}
+{% if not (bootstrap_ipv6_disabled | default(false)) %}
+{%   for bootstrap_dns in bootstrap_dns6 | default([]) %}
+{%     set _ = bootstrap_netplan_dns.append(bootstrap_dns) %}
+{%   endfor %}
+{% endif %}
+{% if bootstrap_netplan_dns | length > 0 %}
+      nameservers:
+        addresses:
+{% for bootstrap_dns in bootstrap_netplan_dns %}
+          - "{{ bootstrap_dns }}"
+{% endfor %}
+{% endif %}
+{% set bootstrap_netplan_routes = [] %}
+{% if _bootstrap_network_ipv4_static_configured | bool %}
+{%   set _ = bootstrap_netplan_routes.append({'to': 'default', 'via': bootstrap_gateway}) %}
+{% endif %}
+{% if _bootstrap_network_ipv6_static_configured | bool %}
+{%   set _ = bootstrap_netplan_routes.append({'to': '::/0', 'via': bootstrap_gateway6}) %}
+{% endif %}
+{% if bootstrap_netplan_routes | length > 0 %}
+      routes:
+{% for bootstrap_route in bootstrap_netplan_routes %}
+        - to: "{{ bootstrap_route.to }}"
+          via: "{{ bootstrap_route.via }}"
+{% endfor %}
+{% endif %}

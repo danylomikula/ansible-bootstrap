@@ -139,7 +139,7 @@ argument_specs:
         type: str
         required: false
         default: ""
-        description: NetworkManager connection name (auto-detect if empty)
+        description: NetworkManager connection name (auto-detect if empty, RedHat only)
       bootstrap_static_ip:
         type: str
         required: false

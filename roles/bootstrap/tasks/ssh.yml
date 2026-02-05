@@ -1,6 +1,4 @@
 ---
-# SSH hardening tasks
-
 - name: Install openssh-server (Debian/Ubuntu)
   ansible.builtin.apt:
     name: openssh-server

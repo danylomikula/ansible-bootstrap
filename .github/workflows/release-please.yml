@@ -46,7 +46,7 @@ jobs:
           python-version: "3.14"
 
       - name: Install Ansible
-        run: pip install ansible-core>=2.20
+        run: pip install 'ansible-core>=2.20'
 
       - name: Build collection
         run: ansible-galaxy collection build

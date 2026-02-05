@@ -1,0 +1,17 @@
+---
+- name: Verify CI Scenario - Expand Filesystem
+  hosts: targets
+  become: true
+  gather_facts: true
+  tasks:
+    - name: Verify root filesystem is mounted
+      ansible.builtin.command:
+        cmd: findmnt -n -o SOURCE /
+      register: root_source
+      changed_when: false
+      failed_when: root_source.stdout | trim | length == 0
+
+    - name: Verify growpart command is available
+      ansible.builtin.command:
+        cmd: which growpart
+      changed_when: false

@@ -1,0 +1,46 @@
+---
+shared_state: false
+
+dependency:
+  name: galaxy
+  options:
+    requirements-file: ${MOLECULE_PROJECT_DIRECTORY}/requirements.yml
+
+driver:
+  name: default
+  options:
+    managed: true
+
+platforms:
+  - name: target
+    groups:
+      - targets
+
+provisioner:
+  name: ansible
+  playbooks:
+    create: create.yml
+    cleanup: cleanup.yml
+    converge: ${MOLECULE_SCENARIO_DIRECTORY}/scenarios/${MOLECULE_HCLOUD_SCENARIO:-default}.yml
+    verify: ${MOLECULE_SCENARIO_DIRECTORY}/verify/${MOLECULE_HCLOUD_SCENARIO:-default}.yml
+    destroy: destroy.yml
+  env:
+    ANSIBLE_ROLES_PATH: ${MOLECULE_PROJECT_DIRECTORY}/roles
+    ANSIBLE_LOCAL_TEMP: /tmp/ansible-local
+    ANSIBLE_REMOTE_TEMP: /tmp/ansible-remote
+    CI_PROJECT_DIR: ${MOLECULE_PROJECT_DIRECTORY}
+  config_options:
+    defaults:
+      deprecation_warnings: false
+      result_format: yaml
+
+verifier:
+  name: ansible
+
+scenario:
+  test_sequence:
+    - syntax
+    - create
+    - converge
+    - verify
+    - destroy

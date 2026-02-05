@@ -1,32 +1,20 @@
 ---
-- name: Converge
-  hosts: all
+- name: CI Scenario - Default
+  hosts: targets
   become: true
   vars:
-    # User configuration
     bootstrap_user: "testadmin"
-    bootstrap_user_extra_groups: []
-
-    # SSH key - use existing test key
     bootstrap_ssh_pubkey: ""
     bootstrap_ssh_key_generate: false
-
-    # Hostname
+    bootstrap_hostname_enabled: true
     bootstrap_hostname: "test-server"
-
-    # SSH hardening
     bootstrap_ssh_password_auth: false
-    bootstrap_ssh_root_login: false
-
-    # Firewall
+    bootstrap_ssh_root_login: true
     bootstrap_firewall_enabled: true
     bootstrap_firewall_services:
       - ssh
-
-    # Disabled for Docker
     bootstrap_network_enabled: false
     bootstrap_expand_fs_enabled: false
     bootstrap_reboot_enabled: false
-
   roles:
     - bootstrap

@@ -1,6 +1,4 @@
 ---
-# Expand filesystem tasks
-
 - name: Check if raspi-config exists (Raspberry Pi)
   ansible.builtin.stat:
     path: /usr/bin/raspi-config

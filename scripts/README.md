@@ -4,131 +4,78 @@ Utility scripts for testing the bootstrap role.
 
 ## test-all-platforms.sh
 
-Run molecule tests across all supported platforms and scenarios.
+Run Molecule Hetzner scenarios across distro/scenario matrix.
 
 ### Quick Start
 
 ```bash
-# Run ALL scenarios on ALL platforms (12 tests total)
-./scripts/test-all-platforms.sh
+# Run compact Hetzner matrix (8 curated jobs)
+HCLOUD_TOKEN=<token> ./scripts/test-all-platforms.sh
 
-# Quick test - only default scenario on debian13
-./scripts/test-all-platforms.sh --scenario default --platform debian13
+# Run one scenario on one distro
+HCLOUD_TOKEN=<token> ./scripts/test-all-platforms.sh --scenario network --platform ubuntu2404
 ```
 
 ### Usage
 
 ```bash
-./scripts/test-all-platforms.sh [OPTIONS] [MOLECULE_COMMAND]
+HCLOUD_TOKEN=<token> ./scripts/test-all-platforms.sh [OPTIONS] [MOLECULE_COMMAND]
 ```
 
 ### Options
 
 | Option | Description |
 |--------|-------------|
-| `--scenario NAME` | Run only specific scenario on all platforms |
-| `--platform NAME` | Run all scenarios on specific platform only |
+| `--scenario NAME` | Run only specific scenario on all distros |
+| `--platform NAME` | Run all scenarios on specific distro |
 | `--list-scenarios` | List available scenarios |
-| `--list-platforms` | List available platforms |
+| `--list-platforms` | List available distros |
 | `-h, --help` | Show help |
 
 ### Molecule Commands
 
-Default command is `test`. You can specify any molecule command:
+Default command is `test`. You can pass any Molecule command:
 
-- `test` - Full test cycle (create, converge, verify, destroy)
-- `converge` - Only create and configure (no destroy)
-- `verify` - Only run verification tests
-- `destroy` - Only destroy test instances
+- `test` - Full cycle (create, converge, verify, destroy)
+- `converge` - Provision and apply role only
+- `verify` - Run verifier only
+- `destroy` - Destroy allocated test resources
 
 ### Environment Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `STOP_ON_FAILURE` | `true` | Stop testing after first failure. Set to `false` to continue |
-| `MOLECULE_DISTRO` | `debian13` | Override default distribution for single `molecule` runs |
+| `HCLOUD_TOKEN` | required | Hetzner Cloud API token |
+| `HCLOUD_SERVER_TYPE` | `cx33` | Hetzner server type |
+| `HCLOUD_LOCATION` | `hel1` | Primary Hetzner location |
+| `HCLOUD_FALLBACK_LOCATIONS` | `fsn1,nbg1` | Extra locations when primary has no capacity |
+| `STOP_ON_FAILURE` | `true` | Stop after first failed matrix item |
 
-### Supported Platforms
+### Supported Distros
 
-| Platform | Image |
-|----------|-------|
-| debian13 | geerlingguy/docker-debian13-ansible |
-| ubuntu2404 | geerlingguy/docker-ubuntu2404-ansible |
-| rockylinux10 | geerlingguy/docker-rockylinux10-ansible |
+| Distro | Hetzner image |
+|--------|---------------|
+| `debian13` | `debian-13` |
+| `ubuntu2404` | `ubuntu-24.04` |
+| `rockylinux10` | `rocky-10` |
 
-### Test Scenarios
+### Scenarios
 
-| Scenario | Description | Features Tested |
-|----------|-------------|-----------------|
-| `default` | Standard configuration | User, SSH hardening, hostname, firewall |
-| `minimal` | Minimal configuration | Only user creation (all else disabled) |
-| `ssh-generate` | SSH key generation | Generate keypair locally, deploy to host |
-| `full` | Full configuration | Custom groups, SSH port 2222, firewall ports |
-
-### Examples
-
-```bash
-# Test all scenarios on all platforms
-./scripts/test-all-platforms.sh
-
-# Test only default scenario on debian13
-./scripts/test-all-platforms.sh --scenario default --platform debian13
-
-# Test all scenarios on Rocky Linux 10 only
-./scripts/test-all-platforms.sh --platform rockylinux10
-
-# Only converge (keep instances running for debugging)
-./scripts/test-all-platforms.sh converge
-
-# Continue testing after failures
-STOP_ON_FAILURE=false ./scripts/test-all-platforms.sh
-
-# List available scenarios
-./scripts/test-all-platforms.sh --list-scenarios
-
-# List available platforms
-./scripts/test-all-platforms.sh --list-platforms
-```
-
-### Test Matrix
-
-Running without filters executes: **4 scenarios x 3 platforms = 12 tests**
-
-```
-default/debian13       default/ubuntu2404       default/rockylinux10
-minimal/debian13       minimal/ubuntu2404       minimal/rockylinux10
-ssh-generate/debian13  ssh-generate/ubuntu2404  ssh-generate/rockylinux10
-full/debian13          full/ubuntu2404          full/rockylinux10
-```
-
-### Output
-
-The script provides colored output:
-- `[INFO]` - Blue - General information
-- `[PASS]` - Green - Test passed
-- `[FAIL]` - Red - Test failed
-- `[WARN]` - Yellow - Warnings
-- `[SCENARIO]` - Cyan - Scenario start
-
-At the end, a summary shows all test results with pass/fail counts.
-
-### Requirements
-
-- Docker (or Colima on macOS)
-- Python 3.10+
-- molecule
-- molecule-plugins[docker]
-- ansible-core
-
-Install dependencies:
-
-```bash
-pip install molecule molecule-plugins[docker] ansible-core
-ansible-galaxy collection install -r requirements.yml
-```
+| Scenario | Description |
+|----------|-------------|
+| `minimal` | Minimal user setup only |
+| `full` | Extended user/SSH/firewall setup (includes SSH key generation checks) |
+| `network` | NetworkManager + firewall validation (Debian/Ubuntu) |
+| `expand-fs` | Filesystem expansion checks |
+| `reboot` | Reboot flow validation |
 
 ### Notes
 
-- **Network tests**: Disabled in Docker (static IP not applicable)
-- **Expand filesystem**: Disabled in Docker (not applicable)
-- **Reboot**: Disabled in Docker (would kill container)
+- Default matrix combinations:
+  - `full`: `debian13`, `ubuntu2404`, `rockylinux10`
+  - `network`: `debian13`, `ubuntu2404`
+  - `minimal`: `debian13`
+  - `expand-fs`: `ubuntu2404`
+  - `reboot`: `ubuntu2404`
+- CI uses the same Molecule `hetzner` scenario as this script.
+- Workflow-level cleanup removes leaked `mol-<run_id>-*` resources when needed.

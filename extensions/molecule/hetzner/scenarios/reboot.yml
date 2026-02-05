@@ -1,0 +1,14 @@
+---
+- name: CI Scenario - Reboot
+  hosts: targets
+  become: true
+  vars:
+    bootstrap_user: "rebootuser"
+    bootstrap_ssh_enabled: false
+    bootstrap_hostname_enabled: false
+    bootstrap_firewall_enabled: false
+    bootstrap_network_enabled: false
+    bootstrap_expand_fs_enabled: false
+    bootstrap_reboot_enabled: true
+  roles:
+    - bootstrap

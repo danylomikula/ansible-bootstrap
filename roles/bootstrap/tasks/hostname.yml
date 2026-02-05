@@ -1,21 +1,40 @@
 ---
-# Hostname configuration tasks
-# Note: Skipped in containers (Docker) as /etc/hostname and /etc/hosts are read-only
+- name: Determine effective hostname
+  ansible.builtin.set_fact:
+    _bootstrap_hostname_effective: >-
+      {{
+        (bootstrap_hostname | default('') | trim)
+        if (bootstrap_hostname | default('') | trim) | length > 0
+        else inventory_hostname
+      }}
 
-- name: Check if running in container
+- name: Ensure effective hostname is set
+  ansible.builtin.fail:
+    msg: "Unable to determine hostname. Set bootstrap_hostname explicitly."
+  when: _bootstrap_hostname_effective | default('') | length == 0
+
+- name: Check if cloud-init is present
   ansible.builtin.stat:
-    path: /.dockerenv
-  register: _bootstrap_dockerenv
+    path: /etc/cloud/cloud.cfg
+  register: _bootstrap_cloud_init
+
+- name: Disable cloud-init hostname overrides
+  ansible.builtin.copy:
+    dest: /etc/cloud/cloud.cfg.d/99-bootstrap-hostname.cfg
+    content: |
+      preserve_hostname: true
+    owner: root
+    group: root
+    mode: '0644'
+  when: _bootstrap_cloud_init.stat.exists
 
 - name: Set hostname
   ansible.builtin.hostname:
-    name: "{{ bootstrap_hostname }}"
-  when: not _bootstrap_dockerenv.stat.exists
+    name: "{{ _bootstrap_hostname_effective }}"
 
 - name: Update /etc/hosts with hostname
   ansible.builtin.lineinfile:
     path: /etc/hosts
     regexp: "^127\\.0\\.1\\.1\\s+"
-    line: "127.0.1.1\t{{ bootstrap_hostname }}"
+    line: "127.0.1.1\t{{ _bootstrap_hostname_effective }}"
     state: present
-  when: not _bootstrap_dockerenv.stat.exists

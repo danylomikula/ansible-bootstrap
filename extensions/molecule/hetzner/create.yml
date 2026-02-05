@@ -1,0 +1,215 @@
+---
+- name: Create Hetzner instance for Molecule
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    hcloud_token: "{{ lookup('env', 'HCLOUD_TOKEN') }}"
+    hcloud_server_type: "{{ lookup('env', 'HCLOUD_SERVER_TYPE') | default('cx33', true) }}"
+    hcloud_location: "{{ lookup('env', 'HCLOUD_LOCATION') | default('hel1', true) }}"
+    hcloud_fallback_locations_raw: "{{ lookup('env', 'HCLOUD_FALLBACK_LOCATIONS') | default('fsn1,nbg1', true) }}"
+    molecule_hcloud_distro: "{{ lookup('env', 'MOLECULE_HCLOUD_DISTRO') | default('debian13', true) }}"
+    molecule_hcloud_scenario: "{{ lookup('env', 'MOLECULE_HCLOUD_SCENARIO') | default('default', true) }}"
+    molecule_run_id: "{{ lookup('env', 'GITHUB_RUN_ID') | default('local', true) }}"
+    molecule_run_attempt: "{{ lookup('env', 'GITHUB_RUN_ATTEMPT') | default('0', true) }}"
+    molecule_random_suffix: "{{ (molecule_ephemeral_directory | hash('sha1'))[:6] }}"
+    hcloud_image_map:
+      debian13: debian-13
+      ubuntu2404: ubuntu-24.04
+      rockylinux10: rocky-10
+    molecule_state_file: "{{ molecule_ephemeral_directory }}/hcloud_state.yml"
+    molecule_private_key_path: "{{ molecule_ephemeral_directory }}/id_ed25519"
+    _molecule_name_seed: >-
+      {{
+        (
+          'mol-'
+          ~ molecule_run_id
+          ~ '-'
+          ~ molecule_run_attempt
+          ~ '-'
+          ~ molecule_hcloud_distro
+          ~ '-'
+          ~ molecule_hcloud_scenario
+          ~ '-'
+          ~ molecule_random_suffix
+        )
+        | lower
+        | regex_replace('[^a-z0-9-]', '-')
+        | regex_replace('-+', '-')
+      }}
+    molecule_server_name: "{{ _molecule_name_seed[:63] }}"
+    molecule_ssh_key_name: "{{ (_molecule_name_seed ~ '-key')[:63] }}"
+  tasks:
+    - name: Ensure HCLOUD_TOKEN is provided
+      ansible.builtin.assert:
+        that:
+          - hcloud_token | length > 0
+        fail_msg: "HCLOUD_TOKEN is required for Molecule Hetzner tests."
+
+    - name: Ensure supported distro is selected
+      ansible.builtin.assert:
+        that:
+          - molecule_hcloud_distro in hcloud_image_map
+        fail_msg: "Unsupported MOLECULE_HCLOUD_DISTRO='{{ molecule_hcloud_distro }}'."
+
+    - name: Build ordered Hetzner location list
+      ansible.builtin.set_fact:
+        _hcloud_locations: >-
+          {{
+            [hcloud_location]
+            + (
+              hcloud_fallback_locations_raw.split(',')
+              | map('trim')
+              | reject('equalto', '')
+              | reject('equalto', hcloud_location)
+              | list
+            )
+          }}
+
+    - name: Ensure Molecule ephemeral directory exists
+      ansible.builtin.file:
+        path: "{{ molecule_ephemeral_directory }}"
+        state: directory
+        mode: "0700"
+
+    - name: Generate temporary SSH keypair for test host
+      community.crypto.openssh_keypair:
+        path: "{{ molecule_private_key_path }}"
+        type: ed25519
+        state: present
+        mode: "0600"
+
+    - name: Create Hetzner SSH key
+      ansible.builtin.command:
+        cmd: >-
+          hcloud ssh-key create
+          --name {{ molecule_ssh_key_name }}
+          --public-key-from-file {{ molecule_private_key_path }}.pub
+          --output json
+      register: _hcloud_ssh_key_create
+      changed_when: _hcloud_ssh_key_create.rc == 0
+      environment:
+        HCLOUD_TOKEN: "{{ hcloud_token }}"
+
+    - name: Parse Hetzner SSH key create response
+      ansible.builtin.set_fact:
+        _hcloud_ssh_key_id: "{{ (_hcloud_ssh_key_create.stdout | from_json).ssh_key.id }}"
+
+    - name: Attempt Hetzner server create by location
+      ansible.builtin.command:
+        cmd: >-
+          hcloud server create
+          --name {{ molecule_server_name }}
+          --type {{ hcloud_server_type }}
+          --image {{ hcloud_image_map[molecule_hcloud_distro] }}
+          --location {{ item }}
+          --ssh-key {{ _hcloud_ssh_key_id }}
+          --output json
+      loop: "{{ _hcloud_locations }}"
+      register: _hcloud_server_create_attempts
+      changed_when: false
+      failed_when: false
+      until: >-
+        (_hcloud_server_create_attempts.rc | int) == 0
+        or
+        (
+          (_hcloud_server_create_attempts.stderr | default(''))
+          is not search('resource_limit_exceeded|resource_unavailable')
+        )
+      retries: 8
+      delay: 20
+      environment:
+        HCLOUD_TOKEN: "{{ hcloud_token }}"
+
+    - name: Collect Hetzner server create errors
+      ansible.builtin.set_fact:
+        _hcloud_server_create_errors: >-
+          {{
+            _hcloud_server_create_attempts.results
+            | map(attribute='stderr')
+            | map('default', '')
+            | list
+          }}
+
+    - name: Pick successful server create result
+      ansible.builtin.set_fact:
+        _hcloud_server_create_success: >-
+          {{
+            (_hcloud_server_create_attempts.results | selectattr('rc', 'equalto', 0) | list | first)
+            | default({})
+          }}
+
+    - name: Fail when server cannot be created in all locations
+      ansible.builtin.fail:
+        msg: >-
+          Unable to create Hetzner server.
+          Tried locations: {{ _hcloud_locations }}.
+          Errors: {{ _hcloud_server_create_errors }}.
+          If errors contain resource_limit_exceeded, reduce CI parallelism
+          (HCLOUD_MAX_PARALLEL) or increase Hetzner server limits.
+      when: (_hcloud_server_create_success.rc | default(1)) != 0
+
+    - name: Parse server create response
+      ansible.builtin.set_fact:
+        _hcloud_server_create_json: "{{ _hcloud_server_create_success.stdout | from_json }}"
+        molecule_server_id: "{{ (_hcloud_server_create_success.stdout | from_json).server.id }}"
+        molecule_server_ip: "{{ (_hcloud_server_create_success.stdout | from_json).server.public_net.ipv4.ip }}"
+        molecule_server_location: "{{ _hcloud_server_create_success.item }}"
+
+    - name: Wait for SSH port to open
+      ansible.builtin.wait_for:
+        host: "{{ molecule_server_ip }}"
+        port: 22
+        timeout: 300
+        delay: 2
+
+    - name: Wait until SSH login works
+      ansible.builtin.command:
+        cmd: >-
+          ssh -i {{ molecule_private_key_path }}
+          -o StrictHostKeyChecking=no
+          -o UserKnownHostsFile=/dev/null
+          -o ConnectTimeout=10
+          root@{{ molecule_server_ip }} echo ready
+      register: _molecule_ssh_wait
+      changed_when: false
+      retries: 60
+      delay: 5
+      until: _molecule_ssh_wait.rc == 0
+
+    - name: Wait for cloud-init to finish (best effort)
+      ansible.builtin.command:
+        cmd: >-
+          ssh -i {{ molecule_private_key_path }}
+          -o StrictHostKeyChecking=no
+          -o UserKnownHostsFile=/dev/null
+          -o ConnectTimeout=10
+          root@{{ molecule_server_ip }} "timeout 900 cloud-init status --wait >/dev/null 2>&1 || true"
+      changed_when: false
+      failed_when: false
+
+    - name: Build Molecule instance config payload
+      ansible.builtin.set_fact:
+        _molecule_instance_config_payload:
+          - instance: target
+            address: "{{ molecule_server_ip }}"
+            user: root
+            port: "22"
+            identity_file: "{{ molecule_private_key_path }}"
+
+    - name: Write Molecule instance config
+      ansible.builtin.copy:
+        dest: "{{ molecule_instance_config }}"
+        mode: "0600"
+        content: "{{ _molecule_instance_config_payload | to_yaml }}"
+
+    - name: Persist Hetzner state for destroy phase
+      ansible.builtin.copy:
+        dest: "{{ molecule_state_file }}"
+        mode: "0600"
+        content: |
+          server_id: "{{ molecule_server_id }}"
+          server_name: "{{ molecule_server_name }}"
+          server_location: "{{ molecule_server_location }}"
+          ssh_key_name: "{{ molecule_ssh_key_name }}"
+          ssh_key_path: "{{ molecule_private_key_path }}"

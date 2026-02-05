@@ -8,7 +8,7 @@ Universal server bootstrap role for initial server configuration.
 - **SSH Hardening**: Disable password auth, root login, custom port
 - **SSH Key Generation**: Auto-generate ed25519/rsa keys locally
 - **Hostname Configuration**: Set system hostname
-- **Static Network**: Configure static IPv4/IPv6 via NetworkManager
+- **Static Network**: Configure static IPv4/IPv6 via native OS backend (netplan/ifupdown on Debian-family, NetworkManager on RedHat)
 - **Firewall**: Configure firewalld with services, ports, custom zones
 - **Filesystem Expansion**: Expand root partition
 
@@ -30,9 +30,6 @@ Ansible collections (install via `ansible-galaxy collection install -r requireme
 - `ansible.posix >= 1.5.0`
 - `community.general >= 11.0.0`
 - `community.crypto >= 2.0.0`
-
-For development/testing only:
-- `community.docker >= 3.0.0` (required for molecule tests)
 
 ## First Run
 
@@ -87,6 +84,8 @@ ansible_user=admin
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `bootstrap_network_enabled` | `false` | Enable network configuration |
+| `bootstrap_network_interface` | `""` | Interface name (auto-detect from active route if empty) |
+| `bootstrap_network_connection` | `""` | NetworkManager connection name (RedHat only) |
 | `bootstrap_static_ip` | `""` | Static IPv4 (e.g., "10.0.20.51/24") |
 | `bootstrap_gateway` | `""` | IPv4 gateway |
 | `bootstrap_dns4` | `["1.1.1.1", "1.0.0.1"]` | DNS servers |
@@ -117,7 +116,7 @@ ansible_user=admin
 | `bootstrap_hostname_enabled` | `true` | Set hostname |
 | `bootstrap_hostname` | `"{{ inventory_hostname }}"` | Hostname to set |
 | `bootstrap_expand_fs_enabled` | `false` | Expand root filesystem |
-| `bootstrap_reboot_enabled` | `false` | Reboot after configuration |
+| `bootstrap_reboot_enabled` | `true` | Reboot after configuration |
 
 ## Example Playbook
 
@@ -190,16 +189,14 @@ bootstrap_firewall_custom_zones:
 ## Testing
 
 ```bash
-# Run all tests on all platforms
-./scripts/test-all-platforms.sh
+# Run full Hetzner Molecule matrix
+HCLOUD_TOKEN=<token> ./scripts/test-all-platforms.sh
 
-# Test specific scenario
-./scripts/test-all-platforms.sh --scenario full
+# Test specific scenario/platform
+HCLOUD_TOKEN=<token> ./scripts/test-all-platforms.sh --scenario full --platform ubuntu2404
 
-# Test specific platform
-./scripts/test-all-platforms.sh --platform debian13
-
-# Available scenarios: default, minimal, ssh-generate, full
+# Direct Molecule run (same as CI)
+HCLOUD_TOKEN=<token> MOLECULE_HCLOUD_DISTRO=debian13 MOLECULE_HCLOUD_SCENARIO=full molecule test -s hetzner
 ```
 
 ## License

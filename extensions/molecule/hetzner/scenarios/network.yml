@@ -1,0 +1,24 @@
+---
+- name: CI Scenario - Network
+  hosts: targets
+  become: true
+  vars:
+    bootstrap_user: "netadmin"
+    bootstrap_ssh_enabled: false
+    bootstrap_hostname_enabled: true
+    bootstrap_hostname: "network-test-server"
+    bootstrap_firewall_enabled: true
+    bootstrap_firewall_zone: "public"
+    bootstrap_firewall_services:
+      - ssh
+    bootstrap_network_enabled: true
+    bootstrap_static_ip: ""
+    bootstrap_gateway: ""
+    bootstrap_static_ip6: ""
+    bootstrap_gateway6: ""
+    bootstrap_ipv6_dhcpv6: false
+    bootstrap_ipv6_disabled: false
+    bootstrap_expand_fs_enabled: false
+    bootstrap_reboot_enabled: false
+  roles:
+    - bootstrap

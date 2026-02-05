@@ -1,14 +1,11 @@
 ---
-- name: Converge - Minimal Configuration
-  hosts: all
+- name: CI Scenario - Minimal
+  hosts: targets
   become: true
   vars:
-    # Only user creation - everything else disabled
     bootstrap_user: "minimaluser"
-    bootstrap_user_group: ""  # auto-detect
-    bootstrap_user_nopasswd_sudo: false  # test that passwordless sudo is NOT set
-
-    # Disable all optional features
+    bootstrap_user_group: ""
+    bootstrap_user_nopasswd_sudo: false
     bootstrap_ssh_key_generate: false
     bootstrap_ssh_pubkey: ""
     bootstrap_ssh_enabled: false
@@ -17,6 +14,5 @@
     bootstrap_network_enabled: false
     bootstrap_expand_fs_enabled: false
     bootstrap_reboot_enabled: false
-
   roles:
     - bootstrap
