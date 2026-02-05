@@ -19,11 +19,11 @@ platforms:
 provisioner:
   name: ansible
   playbooks:
-    create: ../hetzner/create.yml
-    cleanup: ../hetzner/cleanup.yml
-    converge: ${MOLECULE_PROJECT_DIRECTORY}/molecule/hetzner/scenarios/default.yml
-    verify: ${MOLECULE_PROJECT_DIRECTORY}/molecule/hetzner/verify/default.yml
-    destroy: ../hetzner/destroy.yml
+    create: create.yml
+    cleanup: cleanup.yml
+    converge: ${MOLECULE_SCENARIO_DIRECTORY}/scenarios/${MOLECULE_HCLOUD_SCENARIO:-default}.yml
+    verify: ${MOLECULE_SCENARIO_DIRECTORY}/verify/${MOLECULE_HCLOUD_SCENARIO:-default}.yml
+    destroy: destroy.yml
   env:
     ANSIBLE_ROLES_PATH: ${MOLECULE_PROJECT_DIRECTORY}/roles
     ANSIBLE_LOCAL_TEMP: /tmp/ansible-local

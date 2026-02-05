@@ -110,20 +110,14 @@
       changed_when: false
       failed_when: false
       until: >-
+        (_hcloud_server_create_attempts.rc | int) == 0
+        or
         (
-          (_hcloud_server_create_attempts.results | selectattr('rc', 'equalto', 0) | list | length) > 0
-        ) or (
-          (
-            _hcloud_server_create_attempts.results
-            | map(attribute='stderr')
-            | map('default', '')
-            | reject('search', 'resource_limit_exceeded|resource_unavailable')
-            | list
-            | length
-          ) > 0
+          (_hcloud_server_create_attempts.stderr | default(''))
+          is not search('resource_limit_exceeded|resource_unavailable')
         )
-      retries: 20
-      delay: 30
+      retries: 8
+      delay: 20
       environment:
         HCLOUD_TOKEN: "{{ hcloud_token }}"
 

@@ -62,7 +62,7 @@ jobs:
       HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
     strategy:
       fail-fast: false
-      max-parallel: ${{ fromJSON(vars.HCLOUD_MAX_PARALLEL || '4') }}
+      max-parallel: ${{ fromJSON(vars.HCLOUD_MAX_PARALLEL || '2') }}
       matrix:
         distro:
           - debian13

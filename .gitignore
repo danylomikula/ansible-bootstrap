@@ -10,7 +10,7 @@ ssh_keys/
 .vault_pass
 
 # Molecule
-molecule/.ssh_keys/
+extensions/molecule/.ssh_keys/
 .molecule/
 .cache/
 
