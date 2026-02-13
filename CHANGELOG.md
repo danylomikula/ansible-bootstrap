@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.1](https://github.com/danylomikula/ansible-bootstrap/compare/v2.0.0...v2.0.1) (2026-02-13)
+
+
+### Bug Fixes
+
+* increase reboot async timeout to prevent premature job kill ([#9](https://github.com/danylomikula/ansible-bootstrap/issues/9)) ([346c6bb](https://github.com/danylomikula/ansible-bootstrap/commit/346c6bb01857732507daf48cc41b0f1cd17e07ef))
+
 ## [2.0.0](https://github.com/danylomikula/ansible-bootstrap/compare/v1.1.0...v2.0.0) (2026-02-05)
 
 
