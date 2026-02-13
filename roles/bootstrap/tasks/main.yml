@@ -42,7 +42,7 @@
 
 - name: Reboot if requested
   ansible.builtin.shell: sleep 2 && shutdown -r now "Bootstrap complete, rebooting"
-  async: 1
+  async: 30
   poll: 0
   changed_when: true
   failed_when: false
