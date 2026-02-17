@@ -1,6 +1,20 @@
 ---
 dependencies: []
 
+galaxy_info:
+  author: danylomikula
+  description: Universal server bootstrap role for Debian, Ubuntu, Rocky Linux, and Raspberry Pi OS
+  license: Apache-2.0
+  min_ansible_version: "2.17"
+  galaxy_tags:
+    - bootstrap
+    - server
+    - hardening
+    - ssh
+    - firewall
+    - network
+    - linux
+
 argument_specs:
   main:
     short_description: Universal server bootstrap role
@@ -130,11 +144,6 @@ argument_specs:
         required: false
         default: false
         description: Enable static network configuration
-      bootstrap_network_interface:
-        type: str
-        required: false
-        default: ""
-        description: Network interface (auto-detect if empty)
       bootstrap_network_connection:
         type: str
         required: false
@@ -184,25 +193,17 @@ argument_specs:
         required: false
         default: true
         description: Ignore DNS from DHCPv6/SLAAC
-      bootstrap_ipv6_dhcpv6:
-        type: bool
-        required: false
-        default: false
-        description: Enable DHCPv6/SLAAC for public IPv6 (keeps static ULA if configured)
       bootstrap_ipv6_method:
         type: str
         required: false
-        default: "auto"
+        default: "disabled"
         choices:
+          - disabled
           - auto
           - dhcp
+          - manual
           - link-local
-        description: IPv6 method when bootstrap_ipv6_dhcpv6 is true (auto=SLAAC, dhcp=DHCPv6)
-      bootstrap_ipv6_disabled:
-        type: bool
-        required: false
-        default: true
-        description: Disable IPv6 completely
+        description: "IPv6 mode: disabled, auto (SLAAC), dhcp (DHCPv6), manual (static), link-local"
 
       # Firewall configuration
       bootstrap_firewall_enabled:

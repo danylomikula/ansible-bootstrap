@@ -94,9 +94,7 @@ ansible_user=admin
 | `bootstrap_gateway6` | `""` | IPv6 gateway |
 | `bootstrap_dns6` | `[]` | IPv6 DNS servers |
 | `bootstrap_dns6_ignore_auto` | `true` | Ignore DNS from DHCPv6/SLAAC |
-| `bootstrap_ipv6_dhcpv6` | `false` | Enable DHCPv6/SLAAC for public IPv6 |
-| `bootstrap_ipv6_method` | `"auto"` | IPv6 method: auto (SLAAC), dhcp (DHCPv6), link-local |
-| `bootstrap_ipv6_disabled` | `true` | Disable IPv6 completely |
+| `bootstrap_ipv6_method` | `"disabled"` | IPv6 mode: `disabled`, `auto` (SLAAC), `dhcp` (DHCPv6), `manual` (static), `link-local` |
 
 ### Firewall Configuration
 
@@ -136,8 +134,6 @@ ansible_user=admin
     bootstrap_dns6:
       - "2606:4700:4700::1111"
       - "2606:4700:4700::1001"
-    bootstrap_ipv6_disabled: false
-    bootstrap_ipv6_dhcpv6: true
     bootstrap_ipv6_method: "dhcp"
     bootstrap_firewall_enabled: true
     bootstrap_firewall_zone: "public"

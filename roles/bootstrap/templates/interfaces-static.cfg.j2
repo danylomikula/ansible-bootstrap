@@ -14,18 +14,19 @@ iface {{ _bootstrap_network_ifname }} inet static
 iface {{ _bootstrap_network_ifname }} inet dhcp
 {% endif %}
 
-{% if bootstrap_ipv6_disabled | default(false) %}
+{% set _ipv6_method = bootstrap_ipv6_method | default('disabled') %}
+{% if _ipv6_method == 'disabled' %}
 iface {{ _bootstrap_network_ifname }} inet6 manual
-{% elif _bootstrap_network_ipv6_static_configured | bool %}
+{% elif _ipv6_method == 'manual' and _bootstrap_network_ipv6_static_configured | bool %}
 iface {{ _bootstrap_network_ifname }} inet6 static
   address {{ bootstrap_static_ip6 }}
   gateway {{ bootstrap_gateway6 }}
 {% if bootstrap_dns6 | default([]) | length > 0 %}
   dns-nameservers {{ bootstrap_dns6 | join(' ') }}
 {% endif %}
-{% elif bootstrap_ipv6_dhcpv6 | default(false) %}
-{% set bootstrap_ifupdown_ipv6_method = 'dhcp' if (bootstrap_ipv6_method | default('auto')) == 'dhcp' else 'auto' %}
-iface {{ _bootstrap_network_ifname }} inet6 {{ bootstrap_ifupdown_ipv6_method }}
+{% elif _ipv6_method in ['auto', 'dhcp'] %}
+{% set _ifupdown_method = 'dhcp' if _ipv6_method == 'dhcp' else 'auto' %}
+iface {{ _bootstrap_network_ifname }} inet6 {{ _ifupdown_method }}
 {% if bootstrap_static_ip6 | default('') | length > 0 %}
   up ip -6 addr add {{ bootstrap_static_ip6 }} dev {{ _bootstrap_network_ifname }} || true
 {% endif %}
