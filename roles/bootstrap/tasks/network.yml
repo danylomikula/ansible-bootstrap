@@ -19,10 +19,8 @@
         ) or (
           (bootstrap_static_ip6 | default('') | length > 0)
           and (bootstrap_gateway6 | default('') | length > 0)
-          and not (bootstrap_ipv6_dhcpv6 | default(false))
         ) or
-        (bootstrap_ipv6_dhcpv6 | default(false)) or
-        (bootstrap_ipv6_disabled | default(false))
+        (bootstrap_ipv6_method | default('disabled')) != 'manual'
       }}
 
 - name: Get interface used by current SSH client route
@@ -311,7 +309,7 @@
     - _bootstrap_network_profile_changes_required | bool
     - ansible_facts['os_family'] == 'RedHat'
     - _bootstrap_network_ipv6_static_configured | bool
-    - not (bootstrap_ipv6_dhcpv6 | default(false))
+    - (bootstrap_ipv6_method | default('disabled')) == 'manual'
 
 - name: Configure IPv6 with DHCPv6/SLAAC (RedHat)
   community.general.nmcli:
@@ -320,12 +318,12 @@
     type: "{{ _bootstrap_network_profile_type }}"
     dns6: "{{ bootstrap_dns6 }}"
     dns6_ignore_auto: "{{ bootstrap_dns6_ignore_auto | default(true) }}"
-    method6: "{{ bootstrap_ipv6_method | default('auto') }}"
+    method6: "{{ bootstrap_ipv6_method }}"
     state: present
   when:
     - _bootstrap_network_profile_changes_required | bool
     - ansible_facts['os_family'] == 'RedHat'
-    - bootstrap_ipv6_dhcpv6 | default(false)
+    - (bootstrap_ipv6_method | default('disabled')) in ['auto', 'dhcp', 'link-local']
 
 - name: Disable IPv6 when requested (RedHat)
   community.general.nmcli:
@@ -337,5 +335,4 @@
   when:
     - _bootstrap_network_profile_changes_required | bool
     - ansible_facts['os_family'] == 'RedHat'
-    - bootstrap_ipv6_disabled | default(false)
-    - bootstrap_static_ip6 | default('') | length == 0
+    - (bootstrap_ipv6_method | default('disabled')) == 'disabled'

@@ -16,8 +16,7 @@
     bootstrap_gateway: ""
     bootstrap_static_ip6: ""
     bootstrap_gateway6: ""
-    bootstrap_ipv6_dhcpv6: false
-    bootstrap_ipv6_disabled: false
+    bootstrap_ipv6_method: "auto"
     bootstrap_expand_fs_enabled: false
     bootstrap_reboot_enabled: false
   roles:

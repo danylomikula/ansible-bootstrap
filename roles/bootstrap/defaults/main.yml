@@ -31,21 +31,19 @@ bootstrap_hostname: "{{ inventory_hostname }}"  # required if enabled
 bootstrap_network_enabled: false
 bootstrap_network_interface: ""  # network interface, auto-detect if empty
 bootstrap_network_connection: ""  # NetworkManager connection name (used on RedHat only)
-# IPv4 - set per-host in inventory
+# IPv4
 bootstrap_static_ip: ""  # e.g., "10.0.20.51/24"
 bootstrap_gateway: ""  # e.g., "10.0.20.1"
 bootstrap_dns4:
   - "1.1.1.1"
   - "1.0.0.1"
 bootstrap_dns4_ignore_auto: true  # ignore DNS from DHCP
-# IPv6 - set per-host in inventory
+# IPv6
 bootstrap_static_ip6: ""  # e.g., "2001:db8::51/64"
 bootstrap_gateway6: ""  # e.g., "2001:db8::1"
 bootstrap_dns6: []  # e.g., ["2606:4700:4700::1111"]
 bootstrap_dns6_ignore_auto: true  # ignore DNS from DHCPv6/SLAAC
-bootstrap_ipv6_dhcpv6: false  # enable DHCPv6/SLAAC for public IPv6 (+ optional static ULA)
-bootstrap_ipv6_method: "auto"  # auto (SLAAC), dhcp (DHCPv6), link-local
-bootstrap_ipv6_disabled: true  # disable IPv6 by default
+bootstrap_ipv6_method: "disabled"  # disabled, auto (SLAAC), dhcp (DHCPv6), manual, link-local
 
 # Firewall
 bootstrap_firewall_enabled: false
