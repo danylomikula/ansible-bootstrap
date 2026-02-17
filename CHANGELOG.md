@@ -1,5 +1,16 @@
 # Changelog
 
+## [3.0.0](https://github.com/danylomikula/ansible-bootstrap/compare/v2.0.1...v3.0.0) (2026-02-17)
+
+
+### ⚠ BREAKING CHANGES
+
+* unify IPv6 config into single bootstrap_ipv6_method variable ([#11](https://github.com/danylomikula/ansible-bootstrap/issues/11))
+
+### Features
+
+* unify IPv6 config into single bootstrap_ipv6_method variable ([#11](https://github.com/danylomikula/ansible-bootstrap/issues/11)) ([34e0dc8](https://github.com/danylomikula/ansible-bootstrap/commit/34e0dc841b8fa097daa51baa0986a95c2a5fec7e))
+
 ## [2.0.1](https://github.com/danylomikula/ansible-bootstrap/compare/v2.0.0...v2.0.1) (2026-02-13)
 
 
